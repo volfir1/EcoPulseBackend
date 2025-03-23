@@ -1,0 +1,23 @@
+meta {
+  name: Update User Profile
+  type: http
+  seq: 7
+}
+
+put {
+  url: http://localhost:5000/api/users/67bd5a43964983fccdb634ba
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2N2JkZGNhNGFhMTczNWVkZGMxNjMwMWQiLCJmaXJzdE5hbWUiOiJMZXN0ZXIiLCJsYXN0TmFtZSI6IlNpYmxlIiwiZW1haWwiOiJsZXN0ZXJpcHVsYW5zaWJsZUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc0MDU4MjkyMywiZXhwIjoxNzQwNTg2NTIzfQ.qfEjpMGYBtDHtUqcmYVLiGZpbZWFLwnZYfSz5fXso8U
+}
+
+body:json {
+  {
+      "firstName": "lester",
+      "lastName": "Ipulan",
+      "phone": "09455204134"
+  }
+}

@@ -1,0 +1,32 @@
+meta {
+  name: Register
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:5000/api/auth/register
+  body: json
+  auth: none
+}
+
+params:query {
+  : 
+}
+
+body:json {
+  {
+    "firstName": "John",
+    "lastName": "Sible",
+    "email": "lesteripulansible1@gmail.com",
+    "password": "Lester_2004"
+  }
+  
+}
+
+body:multipart-form {
+  firstName: Lester
+  lastName: Sible
+  email: lesteripulansible@gmail.com
+  password: Lester_2004
+}

@@ -1,0 +1,9 @@
+pymongo
+python-dotenv
+django-cors-headers
+django-extensions
+pandas
+matplotlib
+scikit-learn
+openpyxl
+
