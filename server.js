@@ -28,7 +28,9 @@ app.use(
             "http://10.0.2.2:8000",
             "http://10.0.2.2:8080",    // Added Android emulator with 8080
             "http://localhost:8000",
-            "http://localhost:8080"     // Added localhost with 8080
+            "http://localhost:8080",    // Added localhost with 8080
+            "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app", // First Vercel URL
+            "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app"  // Added second Vercel URL
           ];
       
       // Allow requests with no origin (like mobile apps)
@@ -65,25 +67,6 @@ app.options('*', cors());
 
 // Serve static files only in development
 if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000; // Changed to 8080 for consistency
-  
-  // Start the server only if not in production
-  app.listen(PORT, '0.0.0.0', () => {
-    const networkInterfaces = require('os').networkInterfaces();
-    let localIp = 'unknown';
-    
-    Object.keys(networkInterfaces).forEach((interfaceName) => {
-      networkInterfaces[interfaceName].forEach((iface) => {
-        if (iface.family === 'IPv4' && !iface.internal) {
-          localIp = iface.address;
-        }
-      });
-    });
-    
-    console.log(`Server running in development mode on port ${PORT}`);
-    console.log(`Access from mobile devices at http://${localIp}:${PORT}`);
-  });
-  
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/avatars', express.static(path.join(__dirname, 'public/avatars')));
 }
@@ -159,5 +142,27 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-// Export the app for serverless deployment (Vercel will handle the server start)
+// Start the server in both development and production
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Log additional info in development
+  if (process.env.NODE_ENV !== 'production') {
+    const networkInterfaces = require('os').networkInterfaces();
+    let localIp = 'unknown';
+    
+    Object.keys(networkInterfaces).forEach((interfaceName) => {
+      networkInterfaces[interfaceName].forEach((iface) => {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          localIp = iface.address;
+        }
+      });
+    });
+    
+    console.log(`Access from mobile devices at http://${localIp}:${PORT}`);
+  }
+});
+
+// Export the app for serverless deployment
 module.exports = app;
