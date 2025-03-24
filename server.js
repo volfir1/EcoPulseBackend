@@ -15,40 +15,48 @@ const app = express();
 // Enable compression
 app.use(compression());
 
-// Enhanced CORS configuration for Vercel deployment
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      const allowedOrigins = process.env.ALLOWED_ORIGINS 
-        ? process.env.ALLOWED_ORIGINS.split(',') 
-        : [
-            "http://localhost:5173",
-            "http://192.168.1.2:8080",
-            "http://192.168.1.2:8081", // Added 8081 port
-            "http://10.0.2.2:8000",
-            "http://10.0.2.2:8080",    // Added Android emulator with 8080
-            "http://localhost:8000",
-            "http://localhost:8080",    // Added localhost with 8080
-            "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app", // First Vercel URL
-            "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",  // Added second Vercel URL,
-            "https://eco-pulse-final.vercel.app"
-          ];
-      
-      // Allow requests with no origin (like mobile apps)
-      if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-        callback(null, true);
-      } else {
-        console.warn(`Origin ${origin} not allowed by CORS: ${origin}`);
-        callback(new Error('CORS not allowed for this origin'));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    credentials: true
-  })
-);
+// Improved CORS configuration for credentials support
+app.use(cors({
+  origin: function(origin, callback) {
+    // List of allowed origins
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',') 
+      : [
+          "http://localhost:5173",
+          "http://192.168.1.2:8080",
+          "http://192.168.1.2:8081",
+          "http://10.0.2.2:8000",
+          "http://10.0.2.2:8080",
+          "http://localhost:8000",
+          "http://localhost:8080",
+          "https://eco-pulse-final.vercel.app",
+          "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app",
+          "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app"
+        ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      console.log("Origin not allowed by CORS:", origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+}));
+
+// Ensure credentials header is always set
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
+// Handle preflight requests explicitly 
+app.options('*', cors());
 
 // Parse cookies and JSON
 app.use(cookieParser());
@@ -62,9 +70,6 @@ app.use(express.urlencoded({
   parameterLimit: 50000,
   extended: true
 }));
-
-// Handle preflight requests explicitly for Vercel
-app.options('*', cors());
 
 // Serve static files only in development
 if (process.env.NODE_ENV !== 'production') {
@@ -99,6 +104,23 @@ const connectToDatabase = async () => {
 
 // Connect to MongoDB immediately
 connectToDatabase();
+
+// Debug endpoint to test CORS
+app.get('/api/cors-test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'CORS is configured correctly',
+    origin: req.headers.origin || 'No origin header',
+    allowedOrigins: [
+      "http://localhost:5173",
+      "http://localhost:8000",
+      "http://localhost:8080",
+      "https://eco-pulse-final.vercel.app",
+      "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
+      "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app"
+    ]
+  });
+});
 
 // API Routes
 app.use("/api/auth", require("./routes/authRoutes"));
