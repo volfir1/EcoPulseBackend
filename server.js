@@ -30,7 +30,8 @@ app.use(
             "http://localhost:8000",
             "http://localhost:8080",    // Added localhost with 8080
             "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app", // First Vercel URL
-            "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app"  // Added second Vercel URL
+            "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",  // Added second Vercel URL,
+            "https://eco-pulse-final.vercel.app"
           ];
       
       // Allow requests with no origin (like mobile apps)
