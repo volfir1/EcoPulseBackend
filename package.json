@@ -1,7 +1,6 @@
 {
   "scripts": {
-    "start": "concurrently \"npx nodemon server.js\\"
-  },
+    "start": "concurrently \"npx nodemon server.js\" \"python manage.py runserver\""  },
   "dependencies": {
     "@sendgrid/mail": "^8.1.4",
     "bcrypt": "^5.1.1",
