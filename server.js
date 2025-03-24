@@ -18,36 +18,30 @@ app.use(compression());
 // Improved CORS configuration for credentials support
 app.use(cors({
   origin: function(origin, callback) {
-    // List of allowed origins
+    console.log("Request origin:", origin); // Log the incoming request origin
+
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
       ? process.env.ALLOWED_ORIGINS.split(',') 
       : [
           "http://localhost:5173",
-          "http://192.168.1.2:8080",
-          "http://192.168.1.2:8081",
-          "http://10.0.2.2:8000",
-          "http://10.0.2.2:8080",
-          "http://localhost:8000",
-          "http://localhost:8080",
           "https://eco-pulse-final.vercel.app",
-          "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app",
-          "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app"
+          "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
+          "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app"
         ];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+
+    if (!origin) return callback(null, true); // Allow non-browser requests (like Postman)
+
+    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      console.log("✅ Allowed origin:", origin);
       callback(null, true);
     } else {
-      console.log("Origin not allowed by CORS:", origin);
+      console.log("🚨 Blocked origin:", origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+  credentials: true
 }));
+
 
 // Ensure credentials header is always set
 app.use((req, res, next) => {
