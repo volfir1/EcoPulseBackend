@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-const MONGO_URI = process.env.MONGO_URI;
+const MONGO_URL = process.env.MONGO_URL;
 
-mongoose.connect(MONGO_URI)
+mongoose.connect(MONGO_URL)
   .then(() => console.log('MongoDB connected for seeding'))
   .catch(err => {
     console.error('MongoDB connection error:', err);

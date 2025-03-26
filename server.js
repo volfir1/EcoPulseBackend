@@ -79,9 +79,9 @@ const connectToDatabase = async () => {
     return;
   }
   
-  const mongoUrl = process.env.MONGO_URI;
+  const mongoUrl = process.env.MONGO_URL;
   if (!mongoUrl) {
-    console.error("Error: MONGO_URI environment variable is not set.");
+    console.error("Error: MONGO_URL environment variable is not set.");
     return;
   }
 

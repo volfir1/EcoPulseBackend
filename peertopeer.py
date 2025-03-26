@@ -17,7 +17,7 @@ file_path = os.path.join(script_dir, 'peertopeer.xlsx')
 df = pd.read_excel(file_path)
 
 # MongoDB connection
-MONGO_URI = os.getenv("MONGODB_URI")  # Load MongoDB URI from environment variables
+MONGO_URL = os.getenv("MONGO_URL")  # Load MongoDB URI from environment variables
 DATABASE_NAME = "ecopulse"  # Replace with your database name
 COLLECTION_NAME = "peertopeer"  # Replace with your collection name
 
@@ -28,7 +28,7 @@ def connect_to_mongodb_peertopeer(retries=3, delay=5):
     """
     for attempt in range(retries):
         try:
-            client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+            client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
             db = client[DATABASE_NAME]
             collection = db[COLLECTION_NAME]
             # Attempt to ping the server to check the connection

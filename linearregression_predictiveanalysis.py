@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # MongoDB connection
-MONGO_URI = os.getenv("MONGO_URI")  # Load MongoDB URI from environment variables
+MONGO_URL = os.getenv("MONGO_URL")  # Load MongoDB URI from environment variables
 DATABASE_NAME = "ecopulse"  # Replace with your database name
 COLLECTION_NAME = "predictiveAnalysis"  # Replace with your collection name
 
@@ -32,7 +32,7 @@ def connect_to_mongodb(retries=3, delay=5):
     """
     for attempt in range(retries):
         try:
-            client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+            client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
             db = client[DATABASE_NAME]
             collection = db[COLLECTION_NAME]
             # Attempt to ping the server to check the connection

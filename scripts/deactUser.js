@@ -15,14 +15,14 @@ const userEmail = 'lester.sible@tup.edu.ph';
 
 // Print environment variables for debugging (don't include sensitive info in logs)
 console.log('Environment variables loaded:', {
-  MONGO_URI_EXISTS: !!process.env.MONGO_URI,
+  MONGO_URL_EXISTS: !!process.env.MONGO_URL,
   NODE_ENV: process.env.NODE_ENV
 });
 
 // You may need to hardcode your MongoDB connection string if .env isn't working
 // IMPORTANT: Replace this with your actual MongoDB connection string
 // For development purposes only - avoid hardcoding credentials in production code
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:5000/api';
+const MONGO_URL = process.env.MONGO_URL || 'mongodb://localhost:5000/api';
 
 async function deactivateSpecificUser() {
   try {
@@ -30,11 +30,11 @@ async function deactivateSpecificUser() {
     console.log(`Attempting to deactivate user: ${userEmail} (ID: ${userId})`);
     
     console.log('Connecting to MongoDB with URI:', 
-      MONGO_URI.substring(0, 10) + '...' // Only show part of the URI for security
+      MONGO_URL.substring(0, 10) + '...' // Only show part of the URI for security
     );
     
     // Connect to MongoDB
-    await mongoose.connect(MONGO_URI);
+    await mongoose.connect(MONGO_URL);
     
     console.log('MongoDB connected successfully');
     
