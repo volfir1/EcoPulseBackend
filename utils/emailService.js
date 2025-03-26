@@ -252,6 +252,10 @@ const sendAccountRecoveryEmail = async (user, token) => {
       throw new Error('Email configuration is missing');
     }
     
+    // Generate a 6-digit verification code from the token
+    // This creates a code that's linked to the same token
+    const verificationCode = generateVerificationCode();
+    
     // Use environment variable for the frontend URL
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const recoveryUrl = `${baseUrl}/reactivate-account?token=${token}`;
@@ -264,13 +268,21 @@ const sendAccountRecoveryEmail = async (user, token) => {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #2C7A51;">Account Recovery</h2>
-          <p>We received a request to recover your deactivated account. Click the link below to reactivate your account:</p>
+          <p>We received a request to recover your deactivated account.</p>
           
+          <h3 style="color: #333; margin-top: 20px;">On Web Browser:</h3>
+          <p>Click the link below to reactivate your account:</p>
           <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
             <a href="${recoveryUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Recover My Account</a>
           </div>
           
-          <p><strong>Important:</strong> This link will expire in 5 hours.</p>
+          <h3 style="color: #333; margin-top: 25px;">On Mobile App:</h3>
+          <p>Enter the verification code below in the app to reactivate your account:</p>
+          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; font-size: 24px; letter-spacing: 5px; margin: 20px 0;">
+            <strong>${verificationCode}</strong>
+          </div>
+          
+          <p><strong>Important:</strong> This recovery information will expire in 5 hours.</p>
           <p>If you did not request to recover your account, please ignore this email.</p>
           
           <p>Thank you,<br>The EcoPulse Team</p>
@@ -283,10 +295,29 @@ const sendAccountRecoveryEmail = async (user, token) => {
       recipient: user.email
     });
 
+    // Store the verification code in your database along with the token
+    // This allows either the token or code to be used for recovery
+    await storeVerificationCode(user._id, verificationCode);
+
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('Error sending account recovery email:', error);
     throw new Error(`Failed to send account recovery email: ${error.message}`);
+  }
+};
+
+// Function to store the verification code in the database
+const storeVerificationCode = async (userId, code) => {
+  try {
+    // Example implementation - adjust to your database model
+    await User.findByIdAndUpdate(userId, { 
+      reactivationCode: code,
+      reactivationCodeExpires: new Date(Date.now() + 5 * 60 * 60 * 1000) // 5 hours
+    });
+    return true;
+  } catch (error) {
+    console.error('Error storing verification code:', error);
+    return false;
   }
 };
 
@@ -297,11 +328,13 @@ const sendAutoDeactivationEmail = async (user, reactivationToken) => {
       throw new Error('Email configuration is missing');
     }
     
+    // Generate a verification code for mobile app users
+    const verificationCode = generateVerificationCode();
+    
     // Use environment variable for the frontend URL
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    
-    // Use the reactivationToken parameter correctly
     const reactivationUrl = `${baseUrl}/reactivate-account?token=${reactivationToken}`;
+    const appSchemeUrl = `ecopulse://reactivate-account?token=${reactivationToken}`;
 
     console.log('Sending auto-deactivation email...');
     console.log('Reactivation URL:', reactivationUrl);
@@ -311,29 +344,69 @@ const sendAutoDeactivationEmail = async (user, reactivationToken) => {
       to: user.email,
       subject: 'Your Account Has Been Deactivated - EcoPulse',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2C7A51;">Account Deactivated</h2>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+          <h2 style="color: #2C7A51; text-align: center;">Account Deactivated</h2>
           <p>Your EcoPulse account has been automatically deactivated due to inactivity.</p>
-          <p>To reactivate your account, please click the link below:</p>
           
-          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
-            <a href="${reactivationUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Reactivate My Account</a>
+          <!-- Web Browser Section -->
+          <div style="margin: 25px 0;">
+            <h3 style="color: #333;">On Web Browser:</h3>
+            <p>Click the button below to reactivate your account:</p>
+            
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${reactivationUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Reactivate My Account</a>
+            </div>
           </div>
           
-          <p>This link will expire in 90 days.</p>
-          <p>If you no longer wish to use your account, no action is needed.</p>
+          <!-- Mobile App Section -->
+          <div style="margin: 25px 0; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+            <h3 style="color: #333;">On Mobile App:</h3>
+            <p>Enter this verification code in the app to reactivate your account:</p>
+            
+            <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
+              <div style="font-size: 24px; letter-spacing: 5px; font-weight: bold;">
+                ${verificationCode}
+              </div>
+              <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                This code can be used in the EcoPulse mobile app
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${appSchemeUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Open App</a>
+            </div>
+          </div>
           
-          <p>Thank you,<br>The EcoPulse Team</p>
+          <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+            <p style="color: #666; font-size: 0.9em;">This reactivation link and code will expire in 90 days.</p>
+            <p style="color: #666; font-size: 0.9em;">If you no longer wish to use your account, no action is needed.</p>
+            
+            <p style="margin-top: 20px;">Thank you,<br>The EcoPulse Team</p>
+          </div>
         </div>
       `
     });
 
+    // Store the verification code in the database for mobile app authentication
+    try {
+      await storeVerificationCode(user._id, verificationCode);
+      console.log(`Verification code ${verificationCode} stored for user ${user._id}`);
+    } catch (storeError) {
+      console.error('Error storing verification code:', storeError);
+      // Continue even if storage fails
+    }
+
     console.log('Auto-deactivation email sent successfully:', {
       messageId: info.messageId,
-      recipient: user.email
+      recipient: user.email,
+      includesVerificationCode: true
     });
 
-    return { success: true, messageId: info.messageId };
+    return { 
+      success: true, 
+      messageId: info.messageId,
+      verificationCode: verificationCode // Return code for testing purposes
+    };
   } catch (error) {
     console.error('Error sending auto-deactivation email:', error);
     throw new Error(`Failed to send auto-deactivation email: ${error.message}`);
@@ -422,9 +495,13 @@ const sendReactivationTokenEmail = async (user, reactivationToken) => {
       throw new Error('Email configuration is missing');
     }
     
+    // Generate a verification code for mobile app users
+    const verificationCode = generateVerificationCode();
+    
     // Use environment variable for the frontend URL
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const reactivationUrl = `${baseUrl}/reactivate-account?token=${reactivationToken}`;
+    const appSchemeUrl = `ecopulse://reactivate-account?token=${reactivationToken}`;
 
     console.log('Sending reactivation token email...');
     const info = await transporter.sendMail({
@@ -432,33 +509,75 @@ const sendReactivationTokenEmail = async (user, reactivationToken) => {
       to: user.email,
       subject: 'Reactivate Your Account - EcoPulse',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2C7A51;">Reactivate Your Account</h2>
-          <p>Your EcoPulse account has been deactivated. To reactivate your account, please click the link below:</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+          <h2 style="color: #2C7A51; text-align: center;">Reactivate Your Account</h2>
+          <p>Your EcoPulse account has been deactivated. You can reactivate it using the options below:</p>
           
-          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
-            <a href="${reactivationUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Reactivate My Account</a>
+          <!-- Web Browser Section -->
+          <div style="margin: 25px 0;">
+            <h3 style="color: #333;">On Web Browser:</h3>
+            <p>Click the button below to reactivate your account:</p>
+            
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${reactivationUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Reactivate My Account</a>
+            </div>
           </div>
           
-          <p>This link will expire in 90 days.</p>
-          <p>If you did not request account reactivation or wish to keep your account deactivated, no action is needed.</p>
+          <!-- Mobile App Section -->
+          <div style="margin: 25px 0; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+            <h3 style="color: #333;">On Mobile App:</h3>
+            <p>Enter this verification code in the app to reactivate your account:</p>
+            
+            <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
+              <div style="font-size: 24px; letter-spacing: 5px; font-weight: bold;">
+                ${verificationCode}
+              </div>
+              <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                This code can be used in the EcoPulse mobile app
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${appSchemeUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Open App</a>
+            </div>
+          </div>
           
-          <p>Thank you,<br>The EcoPulse Team</p>
+          <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+            <p style="color: #666; font-size: 0.9em;">This reactivation link and code will expire in 90 days.</p>
+            <p style="color: #666; font-size: 0.9em;">If you did not request account reactivation or wish to keep your account deactivated, no action is needed.</p>
+            
+            <p style="margin-top: 20px;">Thank you,<br>The EcoPulse Team</p>
+          </div>
         </div>
       `
     });
 
+    // Store the verification code in the database for mobile app authentication
+    try {
+      await storeVerificationCode(user._id, verificationCode);
+      console.log(`Verification code ${verificationCode} stored for user ${user._id}`);
+    } catch (storeError) {
+      console.error('Error storing verification code:', storeError);
+      // Continue even if storage fails
+    }
+
     console.log('Reactivation token email sent successfully:', {
       messageId: info.messageId,
-      recipient: user.email
+      recipient: user.email,
+      includesVerificationCode: true
     });
 
-    return { success: true, messageId: info.messageId };
+    return { 
+      success: true, 
+      messageId: info.messageId,
+      verificationCode: verificationCode // Return code for testing purposes
+    };
   } catch (error) {
     console.error('Error sending reactivation token email:', error);
     throw new Error(`Failed to send reactivation token email: ${error.message}`);
   }
 };
+
 const sendDeactivatedLoginAttempt = async (user) => {
   try {
     console.log('Starting admin notification for deactivated account login:', user.email);

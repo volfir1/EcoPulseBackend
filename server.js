@@ -23,7 +23,8 @@ app.use(cors({
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
       ? process.env.ALLOWED_ORIGINS.split(',') 
       : [
-          "http://localhost:5173",
+          "http://localhost:5173/api",
+          "http://localhost:5000/api",
           "https://eco-pulse-final.vercel.app",
           "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
           "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app"
@@ -160,7 +161,7 @@ app.use('/api/*', (req, res) => {
 });
 
 // Start the server in both development and production
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5173;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   
