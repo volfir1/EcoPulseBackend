@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-const MONGO_URL = process.env.MONGO_URL;
+const MONGO_URL = process.env.PY_MONGO_URL;
 
 mongoose.connect(MONGO_URL)
   .then(() => console.log('MongoDB connected for seeding'))
