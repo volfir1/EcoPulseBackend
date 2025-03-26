@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # MongoDB connection
-MONGO_URL = os.getenv("MONGO_URL")  # Load MongoDB URI from environment variables
+PY_PY_PY_PY_PY_PY_PY_MONGO_URL = os.getenv("MONGO_URL")  # Load MongoDB URI from environment variables
 DATABASE_NAME = "ecopulse"  # Replace with your database name
 COLLECTION_NAME = "predictiveAnalysis"  # Replace with your collection name
 
