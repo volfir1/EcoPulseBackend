@@ -10,6 +10,14 @@ const uploadRoutes = require("./routes/uploadRoutes");
 const compression = require('compression');
 const axios = require('axios'); // Add axios for proxying requests
 
+// No-cache headers utility function
+function addNoCacheHeaders(res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+}
+
 // Create Express app
 const app = express();
 
@@ -116,10 +124,12 @@ connectToDatabase();
 
 // Debug endpoint to test CORS
 app.get('/api/cors-test', (req, res) => {
+  addNoCacheHeaders(res);
   res.status(200).json({
     success: true,
     message: 'CORS is configured correctly',
     origin: req.headers.origin || 'No origin header',
+    timestamp: Date.now(),
     allowedOrigins: [
       "http://localhost:5173",
       "http://localhost:8000",
@@ -149,17 +159,23 @@ app.get('/api/predictions/:energyType', async (req, res) => {
     // Generate mock prediction data
     const predictions = generatePredictions(energyType, start_year, end_year);
     
+    // Add no-cache headers
+    addNoCacheHeaders(res);
+    
     res.json({ 
       success: true, 
-      predictions 
+      predictions,
+      timestamp: Date.now() // Add timestamp to show data is fresh
     });
     
   } catch (error) {
     console.error('Error handling prediction request:', error.message);
+    addNoCacheHeaders(res);
     res.status(500).json({
       success: false,
       message: 'Error retrieving prediction data',
-      error: error.message
+      error: error.message,
+      timestamp: Date.now()
     });
   }
 });
@@ -173,17 +189,23 @@ app.get('/api/solar_recommendations', async (req, res) => {
     // Generate mock recommendations
     const recommendations = generateSolarRecommendations(year, budget);
     
+    // Add no-cache headers
+    addNoCacheHeaders(res);
+    
     res.json({
       success: true,
-      recommendations
+      recommendations,
+      timestamp: Date.now()
     });
     
   } catch (error) {
     console.error('Error handling solar recommendations request:', error.message);
+    addNoCacheHeaders(res);
     res.status(500).json({
       success: false,
       message: 'Error retrieving solar recommendations',
-      error: error.message
+      error: error.message,
+      timestamp: Date.now()
     });
   }
 });
@@ -197,17 +219,23 @@ app.get('/api/peertopeer', async (req, res) => {
     // Generate mock peer-to-peer market data
     const marketData = generatePeertoPeerMarketData(year);
     
+    // Add no-cache headers
+    addNoCacheHeaders(res);
+    
     res.json({
       success: true,
-      data: marketData
+      data: marketData,
+      timestamp: Date.now()
     });
     
   } catch (error) {
     console.error('Error handling peer-to-peer request:', error.message);
+    addNoCacheHeaders(res);
     res.status(500).json({
       success: false,
       message: 'Error retrieving peer-to-peer market data',
-      error: error.message
+      error: error.message,
+      timestamp: Date.now()
     });
   }
 });
@@ -215,6 +243,7 @@ app.get('/api/peertopeer', async (req, res) => {
 // ==== MANIFEST.JSON ENDPOINT ====
 // Serve the manifest.json file for PWA support
 app.get('/manifest.json', (req, res) => {
+  addNoCacheHeaders(res);
   res.json({
     "name": "EcoPulse",
     "short_name": "EcoPulse",
@@ -258,6 +287,7 @@ app.use((req, res, next) => {
 
 // Health check endpoint for Vercel (used for monitoring)
 app.get('/api/health', (req, res) => {
+  addNoCacheHeaders(res);
   const health = {
     uptime: process.uptime(),
     timestamp: Date.now(),
@@ -269,15 +299,17 @@ app.get('/api/health', (req, res) => {
 
 // Catch-all route for undefined API endpoints
 app.use('/api/*', (req, res) => {
+  addNoCacheHeaders(res);
   res.status(404).json({
     success: false,
-    message: `API endpoint not found: ${req.originalUrl}`
+    message: `API endpoint not found: ${req.originalUrl}`,
+    timestamp: Date.now()
   });
 });
 
 // ==== MOCK DATA GENERATOR FUNCTIONS ====
 
-// Generate mock predictions
+// Generate mock predictions with slight randomness to ensure fresh data each time
 function generatePredictions(energyType, startYear, endYear) {
   const predictions = [];
   startYear = parseInt(startYear) || 2025;
@@ -313,8 +345,8 @@ function generatePredictions(energyType, startYear, endYear) {
         growthRate = 1.0;
     }
     
-    // Add some random variation
-    const randomOffset = Math.sin(year * 0.5) * 15;
+    // Add some random variation to ensure new data on each request
+    const randomOffset = Math.sin(year * 0.5) * 15 + (Math.random() * 8 - 4);
     
     // Calculate growth trend
     const growthTrend = (year - startYear) * 2.5;
@@ -331,13 +363,16 @@ function generatePredictions(energyType, startYear, endYear) {
   return predictions;
 }
 
-// Generate mock solar recommendations
+// Generate mock solar recommendations with slight variations
 function generateSolarRecommendations(year, budget) {
   year = parseInt(year) || 2025;
   budget = parseInt(budget) || 50000;
   
+  // Add slight randomness
+  const randomFactor = 1 + (Math.random() * 0.1 - 0.05);
+  
   // Baseline efficiency improves with future years
-  const efficiencyFactor = 1 + ((year - 2025) * 0.05);
+  const efficiencyFactor = (1 + ((year - 2025) * 0.05)) * randomFactor;
   
   // Calculate system size based on budget
   const baseSystemSize = budget / 10000;
@@ -346,7 +381,7 @@ function generateSolarRecommendations(year, budget) {
   // Calculate production and financial metrics
   const annualProduction = Math.round(systemSize * 1400 * efficiencyFactor);
   const installationCost = budget;
-  const annualSavings = Math.round(annualProduction * 0.15);
+  const annualSavings = Math.round(annualProduction * 0.15 * randomFactor);
   const paybackPeriod = Math.round((installationCost / annualSavings) * 10) / 10;
   const roi = Math.round((annualSavings / installationCost) * 100 * 10) / 10;
   
@@ -389,12 +424,15 @@ function generateSolarRecommendations(year, budget) {
   };
 }
 
-// Generate mock peer-to-peer energy market data
+// Generate mock peer-to-peer energy market data with variations
 function generatePeertoPeerMarketData(year) {
   year = parseInt(year) || 2025;
   
+  // Add randomness
+  const randomFactor = 1 + (Math.random() * 0.15 - 0.075);
+  
   // Generate mock participants
-  const participants = Math.round(100 + (year - 2025) * 50);
+  const participants = Math.round((100 + (year - 2025) * 50) * randomFactor);
   const growthRate = Math.round((participants / 100) * 10) / 10;
   
   // Generate trading volume that increases with year
@@ -421,26 +459,26 @@ function generatePeertoPeerMarketData(year) {
       averageBuyingPricePerKWh: avgBuyingPrice,
       peakPricingHours: "6PM - 9PM",
       lowestPricingHours: "10AM - 2PM",
-      pricingVolatility: Math.round(10 - (year - 2025)) + "%"
+      pricingVolatility: Math.round(10 - (year - 2025) + (Math.random() * 2 - 1)) + "%"
     },
     topProducers: [
-      { name: "SunValley Community", production: Math.round(tradingVolume * 0.08), reliability: "98%" },
-      { name: "GreenLeaf Housing", production: Math.round(tradingVolume * 0.06), reliability: "97%" },
-      { name: "EcoVillage Cooperative", production: Math.round(tradingVolume * 0.05), reliability: "99%" },
-      { name: "Westside Solar Farm", production: Math.round(tradingVolume * 0.04), reliability: "96%" },
-      { name: "Eastpoint Renewable", production: Math.round(tradingVolume * 0.03), reliability: "95%" }
+      { name: "SunValley Community", production: Math.round(tradingVolume * 0.08 * randomFactor), reliability: "98%" },
+      { name: "GreenLeaf Housing", production: Math.round(tradingVolume * 0.06 * randomFactor), reliability: "97%" },
+      { name: "EcoVillage Cooperative", production: Math.round(tradingVolume * 0.05 * randomFactor), reliability: "99%" },
+      { name: "Westside Solar Farm", production: Math.round(tradingVolume * 0.04 * randomFactor), reliability: "96%" },
+      { name: "Eastpoint Renewable", production: Math.round(tradingVolume * 0.03 * randomFactor), reliability: "95%" }
     ],
     marketTrends: [
       "Increasing residential battery installations enabling more dynamic trading",
       "Growing preference for locally-produced renewable energy",
-      "New participants joining at " + Math.round(5 + (year - 2025) * 2) + "% monthly rate",
+      "New participants joining at " + Math.round(5 + (year - 2025) * 2 + (Math.random() * 2 - 1)) + "% monthly rate",
       "Peak demand shifting to evening hours as EV adoption increases",
-      "Smart contract automation reducing transaction overhead by " + Math.round(10 + (year - 2025) * 5) + "%"
+      "Smart contract automation reducing transaction overhead by " + Math.round(10 + (year - 2025) * 5 + (Math.random() * 5 - 2.5)) + "%"
     ],
     projections: {
       expectedGrowthNextYear: Math.round(20 + Math.random() * 10) + "%",
       priceTrend: "Gradually decreasing as supply increases",
-      newParticipantsForecast: Math.round(participants * 0.3),
+      newParticipantsForecast: Math.round(participants * 0.3 * randomFactor),
       technologyAdoption: year > 2026 ? "Advanced AI grid balancing" : "Basic automated trading"
     }
   };
