@@ -151,6 +151,9 @@ USE_TZ = True
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',  # URL of your frontend application
+    'https://ecopulsebackend-production.up.railway.app',
+    "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
+    'http://localhost:5000'
 ]
 
 
