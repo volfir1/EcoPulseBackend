@@ -30,7 +30,7 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = ['*']  # Allow all hosts in development; restrict in production
 
 # CORS Settings - Update to be more permissive for development
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+# CORS_ALLOW_ALL_ORIGINS = True  # For development only
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -56,7 +56,8 @@ CORS_ALLOW_HEADERS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app"
+    "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
+    "https://eco-pulse-final-git-main-eco-pulse.vercel.app",
     # Railway will provide a domain - add it here when available
 ]
 
