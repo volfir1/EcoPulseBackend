@@ -28,7 +28,9 @@ app.use(cors({
           "https://eco-pulse-final.vercel.app",
           "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
           "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app",
-          "https://corsproxy.io/?"
+          "https://corsproxy.io/?",
+          "https://ecopulsebackend-production.up.railway",
+          "https://ecopulsebackend-production.up.railway.app"
         ];
 
     if (!origin) return callback(null, true); // Allow non-browser requests (like Postman)
