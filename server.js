@@ -21,17 +21,17 @@ app.use(cors({
     console.log("Request origin:", origin); // Log the incoming request origin
 
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',') 
-      : [
-          "http://localhost:5173/api",
-          "http://localhost:5000/api",
-          "https://eco-pulse-final.vercel.app",
-          "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
-          "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app",
-          "https://corsproxy.io/?",
-          "https://ecopulsebackend-production.up.railway",
-          "https://ecopulsebackend-production.up.railway.app"
-        ];
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : [
+      "http://localhost:5173",  // Remove /api
+      "http://localhost:5000",  // Remove /api
+      "https://eco-pulse-final.vercel.app",
+      "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
+      "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app",
+      "https://eco-pulse-final-git-main-eco-pulse.vercel.app", // Add this!
+      "https://corsproxy.io",   // Remove ?
+      "https://ecopulsebackend-production.up.railway.app"
+    ];
 
     if (!origin) return callback(null, true); // Allow non-browser requests (like Postman)
 
