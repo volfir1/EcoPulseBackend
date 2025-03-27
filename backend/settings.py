@@ -54,10 +54,10 @@ CORS_ALLOW_HEADERS = [
 
 # Ensure CSRF settings are properly configured for cross-domain requests
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
-    "https://eco-pulse-final-git-main-eco-pulse.vercel.app",
+   "https://eco-pulse-final.vercel.app",
+    'http://localhost:5173',  # URL of your frontend application
+    'https://ecopulsebackend-production.up.railway.app',
+    'http://localhost:5000'
     # Railway will provide a domain - add it here when available
 ]
 
@@ -151,10 +151,9 @@ USE_I18N = True
 USE_TZ = True
 
 CORS_ALLOWED_ORIGINS = [
-    "https://eco-pulse-final-git-main-eco-pulse.vercel.app",
+    "https://eco-pulse-final.vercel.app",
     'http://localhost:5173',  # URL of your frontend application
     'https://ecopulsebackend-production.up.railway.app',
-    "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
     'http://localhost:5000'
 ]
 
