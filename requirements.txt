@@ -6,8 +6,6 @@ pandas
 matplotlib
 scikit-learn
 openpyxl
+joblib
+numpy
 
-gunicorn==20.1.0
-whitenoise==6.5.0
-dj-database-url==2.1.0
-psycopg-binary==3.2.6
