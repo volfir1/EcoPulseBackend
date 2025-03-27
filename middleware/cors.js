@@ -8,7 +8,7 @@ const cors = require('cors');
 const setupCors = (app) => {
   // Get environment variables
   const NODE_ENV = process.env.NODE_ENV || 'development';
-  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
+  const FRONTEND_URL = process.env.PY_URL || 'http://localhost:5000';
   
   // Parse comma-separated origins from environment variable if available
   const CORS_ORIGINS = process.env.CORS_ORIGINS 
@@ -19,8 +19,8 @@ const setupCors = (app) => {
   const allowedOrigins = [
     FRONTEND_URL,
     // Include production domains
-    'https://your-app.vercel.app',
-    'https://your-custom-domain.com',
+    'https://eco-pulse-final.vercel.app',
+    'https://ecopulsebackend-production.up.railway.app',
     // Include development domains
     'http://localhost:8000',
     'http://localhost:5173',
@@ -33,19 +33,42 @@ const setupCors = (app) => {
   // CORS configuration
   const corsOptions = {
     origin: function(origin, callback) {
+      // Debug logging for all requests
+      console.log(`CORS request from: ${origin || 'No origin (e.g. Postman, curl)'}`);
+      
       // Allow requests with no origin (like mobile apps, Postman, etc)
       if (!origin) {
         console.log('Request has no origin, allowing');
         return callback(null, true);
       }
       
-      if (allowedOrigins.indexOf(origin) !== -1 || NODE_ENV === 'development') {
-        console.log(`Origin ${origin} is allowed`);
-        callback(null, true);
-      } else {
-        console.log(`Origin ${origin} is not allowed by CORS`);
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      // Allow any eco-pulse-final Vercel deployments with regex pattern matching
+      if (origin.match(/https:\/\/eco-pulse-final[^.]*\.vercel\.app/)) {
+        console.log("✅ Allowed Vercel deployment:", origin);
+        return callback(null, true);
       }
+      
+      // Allow access from Railway backend
+      if (origin.includes('ecopulsebackend-production.up.railway.app')) {
+        console.log("✅ Allowed Railway backend:", origin);
+        return callback(null, true);
+      }
+      
+      // Check against explicit allowed origins list
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        console.log(`✅ Origin ${origin} is explicitly allowed`);
+        return callback(null, true);
+      }
+      
+      // In development, allow all origins
+      if (NODE_ENV === 'development') {
+        console.log(`✅ Allowing all origins in development mode`);
+        return callback(null, true);
+      }
+      
+      // Reject all other origins in production
+      console.log(`🚫 Origin ${origin} is not allowed by CORS`);
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true, // Allow cookies and credentials
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
