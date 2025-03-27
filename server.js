@@ -18,34 +18,44 @@ app.use(compression());
 // Improved CORS configuration for credentials support
 app.use(cors({
   origin: function(origin, callback) {
-    console.log("Request origin:", origin); // Log the incoming request origin
+    console.log("Request origin:", origin);
 
-    const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',') 
-  : [
-      "http://localhost:5173",  // Remove /api
-      "http://localhost:5000",  // Remove /api
-      "https://eco-pulse-final.vercel.app",
-      "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
-      "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app",
-      "https://eco-pulse-final-git-main-eco-pulse.vercel.app", // Add this!
-      "https://corsproxy.io",   // Remove ?
-      "https://ecopulsebackend-production.up.railway.app"
-    ];
-
-    if (!origin) return callback(null, true); // Allow non-browser requests (like Postman)
-
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
-      console.log("✅ Allowed origin:", origin);
-      callback(null, true);
-    } else {
-      console.log("🚨 Blocked origin:", origin);
-      callback(new Error('Not allowed by CORS'));
+    // Allow localhost and undefined origin (for non-browser requests)
+    if (!origin || origin.match(/http:\/\/localhost:\d+/)) {
+      return callback(null, true);
     }
+    
+    // Allow any eco-pulse-final Vercel deployments
+    if (origin.match(/https:\/\/eco-pulse-final[^.]*\.vercel\.app/)) {
+      console.log("✅ Allowed Vercel deployment:", origin);
+      return callback(null, true);
+    }
+    
+    // Allow Railway backend
+    if (origin.includes('ecopulsebackend-production.up.railway.app')) {
+      return callback(null, true);
+    }
+    
+    // Check against explicit allowed origins from env variable
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',') 
+      : [];
+      
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Block everything else in production
+    if (process.env.NODE_ENV === 'production') {
+      console.log("🚨 Blocked origin:", origin);
+      return callback(new Error('Not allowed by CORS'));
+    }
+    
+    // Allow all origins in development
+    return callback(null, true);
   },
   credentials: true
 }));
-
 
 // Ensure credentials header is always set
 app.use((req, res, next) => {
