@@ -9,3 +9,8 @@ openpyxl
 joblib
 numpy
 
+Django==5.1.6
+djangorestframework==3.14.0
+django-cors-headers==4.3.0
+pymongo==4.6.1
+gunicorn==21.2.0
