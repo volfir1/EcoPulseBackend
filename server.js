@@ -18,7 +18,7 @@ app.use(compression());
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
   : [
-      'https://eco-pulse-final.vercel.app', 
+      'https://eco-pulse-final.vercel.app/api', 
       'http://localhost:5173',
       'https://eco-pulse-final-git-main-eco-pulse.vercel.app',
       'https://hopeful-appreciation-production.up.railway.app',
