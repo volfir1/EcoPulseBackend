@@ -27,7 +27,12 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-lh&mm0n5y9n5q02tcyd0jd1)gb
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 
-ALLOWED_HOSTS = ['*']  # Allow all hosts in development; restrict in production
+ALLOWED_HOSTS = [
+    'ecopulsebackend-production.up.railway.app',
+    'django-server-production-dac6.up.railway.app',  # Your Django backend URL
+    'localhost',
+    '127.0.0.1'
+]
 
 # CORS Settings - Update to be more permissive for development
 # CORS_ALLOW_ALL_ORIGINS = True  # For development only
@@ -108,6 +113,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
+CORS_ALLOW_ALL_ORIGINS = True
 
 
 # Database
@@ -152,8 +158,9 @@ USE_TZ = True
 
 CORS_ALLOWED_ORIGINS = [
     "https://eco-pulse-final.vercel.app",
-    'http://localhost:5173',  # URL of your frontend application
+    'http://localhost:5173',
     'https://ecopulsebackend-production.up.railway.app',
+    'https://django-server-production-dac6.up.railway.app',  # Your Django backend URL
     'http://localhost:5000'
 ]
 
