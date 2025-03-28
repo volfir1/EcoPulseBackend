@@ -21,6 +21,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
       'https://eco-pulse-final.vercel.app', 
+      'https://ecopulse.up.railway.app',
       'http://localhost:5173',
       'https://eco-pulse-final-git-main-eco-pulse.vercel.app',
       'https://hopeful-appreciation-production.up.railway.app',
