@@ -2,7 +2,6 @@ const express = require("express");
 const path = require("path");
 require("dotenv").config();
 const mongoose = require("mongoose");
-const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const userRoutes = require("./routes/userRoutes");
 const ticketRoutes = require("./routes/ticketRoutes");
@@ -15,53 +14,43 @@ const app = express();
 // Enable compression
 app.use(compression());
 
-// Improved CORS configuration for credentials support
-// Improved CORS configuration
-app.use(cors({
-  origin: function(origin, callback) {
-    console.log("Request origin:", origin);
-    
-    // Parse allowed origins from environment variable
-    const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-      : [];
-    
-    console.log("Configured allowed origins:", allowedOrigins);
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Check if the origin is in our allowed list
-    if (allowedOrigins.includes(origin)) {
-      console.log("✅ Allowed origin:", origin);
-      return callback(null, true);
-    }
-    
-    // Also allow localhost in any case
-    if (origin.match(/http:\/\/localhost:\d+/)) {
-      console.log("✅ Allowed localhost:", origin);
-      return callback(null, true);
-    }
-    
-    // Log and reject other origins
-    console.log("🚨 Blocked origin:", origin);
-    return callback(new Error(`Origin ${origin} not allowed by CORS`));
-  },
-  credentials: true,
-  methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
-
-// Ensure credentials header is always set
+// Single consolidated CORS configuration
 app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://eco-pulse-final.vercel.app', 
+    'http://localhost:5173',
+    'https://eco-pulse-final-git-main-eco-pulse.vercel.app',
+    'https://hopeful-appreciation-production.up.railway.app',
+    'https://ecopulsebackend-production.up.railway.app',
+    'https://django-server-production-dac6.up.railway.app'
+  ];
+  
+  const origin = req.headers.origin;
+  console.log("Request origin:", origin);
+  
+  // Set CORS headers if origin is allowed
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    console.log("✅ Allowed origin:", origin);
+  } else if (origin && origin.match(/http:\/\/localhost:\d+/)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    console.log("✅ Allowed localhost:", origin);
+  } else if (origin) {
+    console.log("🚨 Blocked origin:", origin);
+  }
+  
+  // Set other required CORS headers
   res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   next();
 });
-
-// Handle preflight requests explicitly 
-app.options('*', cors());
 
 // Parse cookies and JSON
 app.use(cookieParser());
@@ -121,8 +110,9 @@ app.get('/api/cors-test', (req, res) => {
       "http://localhost:8000",
       "http://localhost:8080",
       "https://eco-pulse-final.vercel.app",
-      "https://eco-pulse-final-n3ablmy8k-eco-pulse.vercel.app",
-      "https://eco-pulse-final-htgtozi7q-eco-pulse.vercel.app"
+      "https://eco-pulse-final-git-main-eco-pulse.vercel.app",
+      "https://hopeful-appreciation-production.up.railway.app",
+      "https://ecopulsebackend-production.up.railway.app"
     ]
   });
 });
@@ -135,17 +125,19 @@ app.use('/api/upload', uploadRoutes);
 
 // Middleware to inject a new token into the response if available
 app.use((req, res, next) => {
-  // Always set these CORS headers for every request
-  res.header('Access-Control-Allow-Origin', 'https://eco-pulse-final.vercel.app');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
+  const oldSend = res.send;
+  res.send = function(data) {
+    if (res.locals.newToken && res.get('Content-Type')?.includes('application/json')) {
+      try {
+        let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+        parsedData.newToken = res.locals.newToken;
+        data = JSON.stringify(parsedData);
+      } catch (error) {
+        console.error('Error adding token to response:', error);
+      }
+    }
+    return oldSend.call(this, data);
+  };
   next();
 });
 
