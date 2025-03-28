@@ -1,11 +1,26 @@
+# Django and database essentials
+Django
+dj-database-url
 pymongo
+psycopg2-binary
+
+# Environment and settings
 python-dotenv
+gunicorn
+
+# Django extensions
 django-cors-headers
 django-extensions
+
+# Data science and analytics
 pandas
 matplotlib
 scikit-learn
+numpy
 openpyxl
 joblib
-numpy
 
+# Extras that are commonly needed
+requests
+djangorestframework
+whitenoise
