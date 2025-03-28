@@ -20,6 +20,7 @@ const setupCors = (app) => {
     FRONTEND_URL,
     // Include production domains
     'https://eco-pulse-final.vercel.app',
+    'https://ecopulse.up.railway.app',
     'https://ecopulsebackend-production.up.railway.app',
     // Include development domains
     'http://localhost:8000',

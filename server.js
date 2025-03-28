@@ -11,7 +11,7 @@ const cors = require('cors'); // Ensure cors module is properly imported
 const authRoutes = require("./routes/authRoutes");
 
 // Create Express app
-const app = express();
+const app = express();  
 
 // Enable compression
 app.use(compression());
