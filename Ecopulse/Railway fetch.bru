@@ -1,0 +1,16 @@
+meta {
+  name: Railway fetch
+  type: http
+  seq: 9
+}
+
+get {
+  url: https://django-server-production-dac6.up.railway.app/api/predictions/solar/?start_year=2025&end_year=2030
+  body: none
+  auth: inherit
+}
+
+params:query {
+  start_year: 2025
+  end_year: 2030
+}
