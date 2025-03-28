@@ -29,14 +29,15 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = [
     'ecopulsebackend-production.up.railway.app',
-    'django-server-production-dac6.up.railway.app',  # Your Django backend URL
+    'django-server-production-dac6.up.railway.app',
+    'ecopulse.up.railway.app',  # Add this one - it's in your error message
     'localhost',
     '127.0.0.1'
 ]
 
 # CORS Settings - Update to be more permissive for development
 # CORS_ALLOW_ALL_ORIGINS = True  # For development only
-CORS_ALLOW_CREDENTIALS = True
+
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -160,11 +161,12 @@ CORS_ALLOWED_ORIGINS = [
     "https://eco-pulse-final.vercel.app",
     'http://localhost:5173',
     'https://ecopulsebackend-production.up.railway.app',
-    'https://django-server-production-dac6.up.railway.app',  # Your Django backend URL
+    'https://ecopulse.up.railway.app',  # Add this one
+    'https://django-server-production-dac6.up.railway.app',
     'http://localhost:5000'
 ]
 
-
+CORS_ALLOW_CREDENTIALS = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/

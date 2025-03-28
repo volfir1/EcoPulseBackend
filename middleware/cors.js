@@ -43,11 +43,11 @@ const setupCors = (app) => {
         return callback(null, true);
       }
       
-      // Always allow the main frontend URL (highest priority)
-      if (origin === 'https://eco-pulse-final.vercel.app') {
-        console.log("✅ Frontend allowed:", origin);
-        return callback(null, true);
-      }
+      // // Always allow the main frontend URL (highest priority)
+      // if (origin === 'https://eco-pulse-final.vercel.app') {
+      //   console.log("✅ Frontend allowed:", origin);
+      //   return callback(null, true);
+      // }
       
       // Allow any eco-pulse-final Vercel deployments with regex pattern matching
       if (origin.match(/https:\/\/(.*\.)?eco-pulse-final(-git-[\w-]+)?\.vercel\.app/)) {
