@@ -52,13 +52,10 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Ensure CSRF settings are properly configured for cross-domain requests
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://localhost:5000',
-    'https://ecopulsebackend-1.onrender.com',  # Added https:// prefix
-
-    'https://ecopulsebackend.onrender.com'
+CSRF_TRUSTED_ORIGINS = [
+    'https://ecopulsebackend.onrender.com',
+    'https://ecopulsebackend-1.onrender.com',
+    'https://ecopulse-delta.vercel.app'
 ]
 
 
@@ -157,10 +154,17 @@ CORS_ALLOWED_ORIGINS = [
     'https://ecopulsebackend.onrender.com',
 
     # Django Backend:
-    'https://ecopulsebackend-1.onrender.com'
+    'https://ecopulsebackend-1.onrender.com',
+
+    # Vercel Frontend:
+    'https://ecopulse-delta.vercel.app' 
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+SESSION_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SECURE = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
