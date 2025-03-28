@@ -60,11 +60,14 @@ CORS_ALLOW_HEADERS = [
 
 # Ensure CSRF settings are properly configured for cross-domain requests
 CSRF_TRUSTED_ORIGINS = [
-   "https://eco-pulse-final.vercel.app",
-    'http://localhost:5173',  # URL of your frontend application
+    'https://ecopulse.up.railway.app',
+    'https://eco-pulse-final.vercel.app',
+    'http://localhost:5173',
     'https://ecopulsebackend-production.up.railway.app',
-    'http://localhost:5000'
-    # Railway will provide a domain - add it here when available
+    'https://ecopulse.up.railway.app',  # Add this one
+    'https://django-server-production-dac6.up.railway.app',
+    'http://localhost:5000',
+    'ecopulsebackend.onrender.com'
 ]
 
 
@@ -158,12 +161,14 @@ USE_I18N = True
 USE_TZ = True
 
 CORS_ALLOWED_ORIGINS = [
+    'https://ecopulse.up.railway.app',
     "https://eco-pulse-final.vercel.app",
     'http://localhost:5173',
     'https://ecopulsebackend-production.up.railway.app',
     'https://ecopulse.up.railway.app',  # Add this one
     'https://django-server-production-dac6.up.railway.app',
-    'http://localhost:5000'
+    'http://localhost:5000',
+    'ecopulsebackend.onrender.com'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
