@@ -20,6 +20,46 @@ app.use(compression());
 // Apply the CORS configuration from cors.js middleware
 setupCors(app);
 
+// Add explicit CORS headers for the problematic endpoints
+app.use('/api/auth/check-account-status', (req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Set headers explicitly for this route
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  // For OPTIONS requests, send immediate success
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key');
+    res.header('Access-Control-Max-Age', '86400');
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
+
+// Also handle the direct /auth route
+app.use('/auth/check-account-status', (req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key');
+    res.header('Access-Control-Max-Age', '86400');
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
+
 // Enhanced debug logging middleware
 app.use((req, res, next) => {
   // Skip logging for static files
@@ -29,17 +69,6 @@ app.use((req, res, next) => {
   
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   console.log('Origin:', req.headers.origin || 'No origin');
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  
-  // Log cookie presence for debugging auth issues
-  console.log(`Cookie Present: ${req.headers.cookie ? 'Yes' : 'No'}`);
-  
-  // Log response headers for CORS debugging
-  const oldWriteHead = res.writeHead;
-  res.writeHead = function(statusCode, statusMessage, headers) {
-    console.log('Response Headers:', JSON.stringify(this.getHeaders(), null, 2));
-    return oldWriteHead.apply(this, arguments);
-  };
   
   // Track response completion
   res.on('finish', () => {
@@ -109,14 +138,7 @@ app.get('/api/cors-test', (req, res) => {
     }
   });
 });
-app.options('/api/auth/check-account-status', (req, res) => {
-  res.header('Access-Control-Allow-Origin', 'https://eco-pulse-final.vercel.app');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Max-Age', '86400');
-  res.sendStatus(204);
-});
+
 // Important: Mount static routes first before the API routes
 if (process.env.NODE_ENV !== 'production') {
   app.use(express.static(path.join(__dirname, 'public')));

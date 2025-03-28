@@ -1,4 +1,3 @@
-// middleware/cors.js
 const cors = require('cors');
 
 /**
@@ -11,7 +10,7 @@ const setupCors = (app) => {
   const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
   
   // Parse comma-separated origins from environment variable if available
-  const CORS_ORIGINS = process.env.CORS_ORIGINS 
+  const CORS_ORIGINS = process.env.ALLOWED_ORIGINS
     ? process.env.CORS_ORIGINS.split(',') 
     : [];
   
@@ -25,6 +24,7 @@ const setupCors = (app) => {
     // Include development domains
     'http://localhost:8000',
     'http://localhost:5173',
+    'http://localhost:3000',
     ...CORS_ORIGINS // Add any additional origins from env vars
   ];
   
@@ -83,23 +83,61 @@ const setupCors = (app) => {
       'Cookie',
       'X-API-Key'
     ],
-    exposedHeaders: ['Content-Length', 'X-Total-Count'],
+    exposedHeaders: ['Content-Length', 'X-Total-Count', 'X-New-Token'],
     maxAge: 86400 // Cache preflight request results for 24 hours (in seconds)
   };
   
   // Apply CORS middleware with our custom options
   app.use(cors(corsOptions));
   
-  // Handle preflight OPTIONS requests explicitly
-  app.options('*', cors(corsOptions));
+  // Store allowed origins in res.locals for debug endpoint
+  app.use((req, res, next) => {
+    res.locals.allowedOrigins = allowedOrigins;
+    next();
+  });
   
-  // Add a debugging route to verify CORS is working
-  app.get('/api/cors-test', (req, res) => {
-    res.json({
-      success: true,
-      message: 'CORS is working correctly',
-      requestOrigin: req.headers.origin || 'No origin'
+  // Handle specific preflight for the problematic endpoint
+  app.options('/api/auth/check-account-status', (req, res) => {
+    const origin = req.headers.origin;
+    
+    // Set appropriate headers for all origins
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400');
+    
+    // Log the headers we're sending
+    console.log('Sending CORS headers for check-account-status:', {
+      'Access-Control-Allow-Origin': origin || '*',
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS'
     });
+    
+    res.sendStatus(204);
+  });
+  
+  // Handle auth check route explicitly - as a fallback
+  app.use('/api/auth/check-account-status', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
+    next();
+  });
+  
+  // Handle direct route access too (in case you have both routes)
+  app.options('/auth/check-account-status', (req, res) => {
+    const origin = req.headers.origin;
+    
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400');
+    
+    res.sendStatus(204);
   });
   
   console.log('CORS middleware configured successfully');
