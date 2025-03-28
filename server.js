@@ -135,19 +135,17 @@ app.use('/api/upload', uploadRoutes);
 
 // Middleware to inject a new token into the response if available
 app.use((req, res, next) => {
-  const oldSend = res.send;
-  res.send = function(data) {
-    if (res.locals.newToken && res.get('Content-Type')?.includes('application/json')) {
-      try {
-        let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
-        parsedData.newToken = res.locals.newToken;
-        data = JSON.stringify(parsedData);
-      } catch (error) {
-        console.error('Error adding token to response:', error);
-      }
-    }
-    return oldSend.call(this, data);
-  };
+  // Always set these CORS headers for every request
+  res.header('Access-Control-Allow-Origin', 'https://eco-pulse-final.vercel.app');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   next();
 });
 
