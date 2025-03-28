@@ -27,13 +27,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-lh&mm0n5y9n5q02tcyd0jd1)gb
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 
-ALLOWED_HOSTS = [
-    'ecopulsebackend-production.up.railway.app',
-    'django-server-production-dac6.up.railway.app',
-    'ecopulse.up.railway.app',  # Add this one - it's in your error message
-    'localhost',
-    '127.0.0.1'
-]
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,ecopulsebackend.onrender.com,ecopulsebackend-1.onrender.com').split(',')
 
 # CORS Settings - Update to be more permissive for development
 # CORS_ALLOW_ALL_ORIGINS = True  # For development only
@@ -59,15 +53,12 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # Ensure CSRF settings are properly configured for cross-domain requests
-CSRF_TRUSTED_ORIGINS = [
-    'https://ecopulse.up.railway.app',
-    'https://eco-pulse-final.vercel.app',
+CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
-    'https://ecopulsebackend-production.up.railway.app',
-    'https://ecopulse.up.railway.app',  # Add this one
-    'https://django-server-production-dac6.up.railway.app',
     'http://localhost:5000',
-    'ecopulsebackend.onrender.com'
+    'https://ecopulsebackend-1.onrender.com',  # Added https:// prefix
+
+    'https://ecopulsebackend.onrender.com'
 ]
 
 
@@ -161,14 +152,12 @@ USE_I18N = True
 USE_TZ = True
 
 CORS_ALLOWED_ORIGINS = [
-    'https://ecopulse.up.railway.app',
-    "https://eco-pulse-final.vercel.app",
     'http://localhost:5173',
-    'https://ecopulsebackend-production.up.railway.app',
-    'https://ecopulse.up.railway.app',  # Add this one
-    'https://django-server-production-dac6.up.railway.app',
     'http://localhost:5000',
-    'ecopulsebackend.onrender.com'
+    'https://ecopulsebackend.onrender.com',
+
+    # Django Backend:
+    'https://ecopulsebackend-1.onrender.com'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
