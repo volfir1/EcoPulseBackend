@@ -27,7 +27,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'https://django-server-production-dac6.up.railway.app'
     ];
 
-// Enhanced CORS middleware with debug logging
+// Enhanced CORS middleware with detailed logging
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const isPreflight = req.method === 'OPTIONS';
@@ -36,14 +36,13 @@ app.use((req, res, next) => {
   console.log(`\n=== Incoming ${req.method} request ===`);
   console.log('Origin:', origin || 'No origin header');
   console.log('Path:', req.path);
-  console.log('Allowed Origins:', allowedOrigins);
-
+  
   // Handle preflight requests
   if (isPreflight) {
     console.log('Processing preflight request');
-    const allowedOrigin = allowedOrigins.find(o => o === origin);
     
-    if (allowedOrigin || (origin && origin.match(/http:\/\/localhost:\d+/))) {
+    // Allow localhost and any origins from the allowed list
+    if (allowedOrigins.includes(origin) || (origin && origin.match(/http:\/\/localhost:\d+/))) {
       res.header('Access-Control-Allow-Origin', origin);
       res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
       res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
@@ -60,10 +59,14 @@ app.use((req, res, next) => {
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     console.log(`✅ Allowed origin: ${origin}`);
   } else if (origin && origin.match(/http:\/\/localhost:\d+/)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     console.log(`✅ Allowed localhost: ${origin}`);
   } else if (origin) {
     console.log(`🚨 Blocked origin: ${origin}`);
@@ -74,10 +77,17 @@ app.use((req, res, next) => {
 
 // Enhanced debug logging middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  console.log('Cookies:', req.cookies);
-  console.log('Headers:', req.headers);
+  // Skip logging for static files
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico)$/)) {
+    return next();
+  }
   
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  
+  // Log cookie presence for debugging auth issues
+  console.log(`Cookie Present: ${req.headers.cookie ? 'Yes' : 'No'}`);
+  
+  // Track response completion
   res.on('finish', () => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} -> ${res.statusCode}`);
   });
@@ -86,18 +96,17 @@ app.use((req, res, next) => {
 });
 
 // Body parsing middleware
+app.use(cookieParser());
 app.use(express.json({
   limit: '50mb',
-  parameterLimit: 50000
+  parameterLimit: 50000,
+  extended: true
 }));
 app.use(express.urlencoded({
   limit: '50mb',
   parameterLimit: 50000,
   extended: true
 }));
-
-// Cookie parser
-app.use(cookieParser());
 
 // Static files (development only)
 if (process.env.NODE_ENV !== 'production') {
@@ -106,76 +115,133 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Database connection
-const connectDB = async () => {
+const connectToDatabase = async () => {
+  if (mongoose.connection.readyState) {
+    console.log('Using existing MongoDB connection');
+    return;
+  }
+  
+  const mongoUrl = process.env.MONGO_URL;
+  if (!mongoUrl) {
+    console.error("Error: MONGO_URL environment variable is not set.");
+    return;
+  }
+
   try {
-    await mongoose.connect(process.env.MONGO_URL, {
+    await mongoose.connect(mongoUrl, {
       serverSelectionTimeoutMS: 5000,
       maxPoolSize: 10,
       socketTimeoutMS: 45000
     });
-    console.log('MongoDB connected');
+    console.log("Connected to MongoDB");
   } catch (err) {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
+    console.error("MongoDB connection failed:", err);
+    // Don't exit process in case of connection error - allow retry
   }
 };
 
-connectDB();
+// Connect to MongoDB immediately
+connectToDatabase();
 
-// Routes
-app.use("/auth", authRoutes);
-app.use("/api/auth", authRoutes);
+// Debug endpoint to test CORS
+app.get('/api/cors-test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'CORS is configured correctly',
+    origin: req.headers.origin || 'No origin header',
+    allowedOrigins: allowedOrigins
+  });
+});
+
+// Mount auth routes at both /auth and /api/auth paths to handle the frontend URL inconsistency
+app.use("/auth", authRoutes);  // This allows direct /auth/check-account-status access
+app.use("/api/auth", authRoutes);  // This allows /api/auth/check-account-status access
+
+// Other API Routes
 app.use('/api/users', userRoutes);
 app.use('/api/ticket', ticketRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: Date.now(),
+  const health = {
     uptime: process.uptime(),
-    dbState: mongoose.STATES[mongoose.connection.readyState]
-  });
+    timestamp: Date.now(),
+    environment: process.env.NODE_ENV || 'development',
+    database: mongoose.connection.readyState ? 'connected' : 'disconnected'
+  };
+  res.status(200).json(health);
 });
 
-// Token injection middleware
+// Middleware to inject a new token into the response if available
 app.use((req, res, next) => {
-  const originalSend = res.send;
-  res.send = function(body) {
-    if (res.locals.newToken) {
+  const oldSend = res.send;
+  res.send = function(data) {
+    if (res.locals.newToken && res.get('Content-Type')?.includes('application/json')) {
       try {
-        const jsonBody = JSON.parse(body);
-        jsonBody.newToken = res.locals.newToken;
-        body = JSON.stringify(jsonBody);
-      } catch (e) {
-        console.error('Error adding token to response:', e);
+        let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+        parsedData.newToken = res.locals.newToken;
+        data = JSON.stringify(parsedData);
+      } catch (error) {
+        console.error('Error adding token to response:', error);
       }
     }
-    originalSend.call(this, body);
+    return oldSend.call(this, data);
   };
   next();
 });
 
-// Error handling
-app.use((err, req, res, next) => {
-  console.error(`[${new Date().toISOString()}] Error: ${err.message}`);
-  res.status(err.statusCode || 500).json({
+// Catch-all route for undefined API endpoints
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
     success: false,
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Server error'
+    message: `API endpoint not found: ${req.originalUrl}`
   });
 });
 
-// Start server
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error(`Error: ${err.message}`);
+  console.error(err.stack);
+  
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message || 'Internal server error'
+  });
+});
+
+// Start the server
 const PORT = process.env.PORT || 5173;
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Log additional info in development
+  if (process.env.NODE_ENV !== 'production') {
+    const networkInterfaces = require('os').networkInterfaces();
+    let localIp = 'unknown';
+    
+    Object.keys(networkInterfaces).forEach((interfaceName) => {
+      networkInterfaces[interfaceName].forEach((iface) => {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          localIp = iface.address;
+        }
+      });
+    });
+    
+    console.log(`Access from mobile devices at http://${localIp}:${PORT}`);
+  }
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
-  console.error(`Unhandled Rejection: ${err.message}`);
-  server.close(() => process.exit(1));
+  console.error('Unhandled Rejection:', err.message);
+  console.error(err.stack);
+  // Don't exit the process as that would crash the server
 });
 
+// Export the app for serverless deployment
 module.exports = app;
+
+
+
+
