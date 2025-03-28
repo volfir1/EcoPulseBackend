@@ -7,7 +7,8 @@ const userRoutes = require("./routes/userRoutes");
 const ticketRoutes = require("./routes/ticketRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const compression = require('compression');
-const cors = require('cors'); // Ensure cors module is properly imported
+// Replace direct cors import with setupCors middleware
+const setupCors = require('./middleware/cors');
 const authRoutes = require("./routes/authRoutes");
 
 // Create Express app
@@ -16,53 +17,8 @@ const app = express();
 // Enable compression
 app.use(compression());
 
-// Parse and sanitize ALLOWED_ORIGINS environment variable
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : [
-      'https://eco-pulse-final.vercel.app', 
-      'https://ecopulse.up.railway.app',
-      'http://localhost:5173',
-      'https://eco-pulse-final-git-main-eco-pulse.vercel.app',
-      'https://hopeful-appreciation-production.up.railway.app',
-      'https://ecopulsebackend-production.up.railway.app',
-      'https://django-server-production-dac6.up.railway.app'
-    ];
-
-// ===== IMPORTANT: Use the cors package INSTEAD of custom middleware =====
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin) || origin.match(/http:\/\/localhost:\d+/)) {
-      console.log(`✅ CORS allowed origin: ${origin}`);
-      callback(null, true);
-    } else {
-      console.log(`🚨 CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
-
-// Special handling for the problematic endpoint
-app.options('/auth/check-account-status', cors({
-  origin: function(origin, callback) {
-    if (allowedOrigins.includes(origin) || (origin && origin.match(/http:\/\/localhost:\d+/))) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['POST', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-}));
+// Apply the CORS configuration from cors.js middleware
+setupCors(app);
 
 // Enhanced debug logging middleware
 app.use((req, res, next) => {
@@ -136,6 +92,10 @@ connectToDatabase();
 
 // Debug endpoint to test CORS
 app.get('/api/cors-test', (req, res) => {
+  // Get allowedOrigins from cors.js middleware if available
+  const allowedOrigins = res.locals.allowedOrigins || 
+    ['See cors.js middleware for complete list of allowed origins'];
+    
   res.status(200).json({
     success: true,
     message: 'CORS is configured correctly',
@@ -173,7 +133,6 @@ app.get('/api/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     database: mongoose.connection.readyState ? 'connected' : 'disconnected',
     cors: {
-      allowedOrigins,
       headers: res.getHeaders()
     }
   };
@@ -221,7 +180,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`CORS allowed origins:`, allowedOrigins);
   
   // Log additional info in development
   if (process.env.NODE_ENV !== 'production') {

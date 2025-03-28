@@ -8,7 +8,7 @@ const cors = require('cors');
 const setupCors = (app) => {
   // Get environment variables
   const NODE_ENV = process.env.NODE_ENV || 'development';
-  const FRONTEND_URL = process.env.PY_URL || 'http://localhost:5000';
+  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
   
   // Parse comma-separated origins from environment variable if available
   const CORS_ORIGINS = process.env.CORS_ORIGINS 
@@ -44,7 +44,7 @@ const setupCors = (app) => {
       }
       
       // Allow any eco-pulse-final Vercel deployments with regex pattern matching
-      if (origin.match(/https:\/\/eco-pulse-final[^.]*\.vercel\.app/)) {
+      if (origin.match(/https:\/\/(.*\.)?eco-pulse-final(-git-[\w-]+)?\.vercel\.app/)) {
         console.log("✅ Allowed Vercel deployment:", origin);
         return callback(null, true);
       }
@@ -85,11 +85,17 @@ const setupCors = (app) => {
     maxAge: 86400 // Cache preflight request results for 24 hours (in seconds)
   };
   
+  
   // Apply CORS middleware with our custom options
   app.use(cors(corsOptions));
   
   // Handle preflight OPTIONS requests explicitly
-  app.options('*', cors(corsOptions));
+  app.options('*', cors({
+    ...corsOptions,
+    // Railway requires specific handling for preflight
+    allowedHeaders: corsOptions.allowedHeaders.concat(['Cookie', 'X-API-Key']),
+    methods: ['OPTIONS'] // Explicitly state OPTIONS method
+  }));
   
   console.log('CORS middleware configured successfully');
 };
