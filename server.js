@@ -7,6 +7,7 @@ const userRoutes = require("./routes/userRoutes");
 const ticketRoutes = require("./routes/ticketRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const compression = require('compression');
+const cors = require('cors'); // Ensure cors module is properly imported
 const authRoutes = require("./routes/authRoutes");
 
 // Create Express app
@@ -27,53 +28,40 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'https://django-server-production-dac6.up.railway.app'
     ];
 
-// Enhanced CORS middleware with detailed logging
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const isPreflight = req.method === 'OPTIONS';
-
-  // Log request details
-  console.log(`\n=== Incoming ${req.method} request ===`);
-  console.log('Origin:', origin || 'No origin header');
-  console.log('Path:', req.path);
-  
-  // Handle preflight requests
-  if (isPreflight) {
-    console.log('Processing preflight request');
+// ===== IMPORTANT: Use the cors package INSTEAD of custom middleware =====
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
     
-    // Allow localhost and any origins from the allowed list
-    if (allowedOrigins.includes(origin) || (origin && origin.match(/http:\/\/localhost:\d+/))) {
-      res.header('Access-Control-Allow-Origin', origin);
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
-      res.header('Access-Control-Allow-Credentials', 'true');
-      console.log(`✅ Allowed preflight for origin: ${origin}`);
-      return res.status(204).end();
+    if (allowedOrigins.includes(origin) || origin.match(/http:\/\/localhost:\d+/)) {
+      console.log(`✅ CORS allowed origin: ${origin}`);
+      callback(null, true);
+    } else {
+      console.log(`🚨 CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
     }
-    
-    console.log(`🚨 Blocked preflight for origin: ${origin}`);
-    return res.status(403).json({ error: 'Origin not allowed' });
-  }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
 
-  // Handle regular requests
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    console.log(`✅ Allowed origin: ${origin}`);
-  } else if (origin && origin.match(/http:\/\/localhost:\d+/)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    console.log(`✅ Allowed localhost: ${origin}`);
-  } else if (origin) {
-    console.log(`🚨 Blocked origin: ${origin}`);
-  }
-
-  next();
-});
+// Special handling for the problematic endpoint
+app.options('/auth/check-account-status', cors({
+  origin: function(origin, callback) {
+    if (allowedOrigins.includes(origin) || (origin && origin.match(/http:\/\/localhost:\d+/))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+}));
 
 // Enhanced debug logging middleware
 app.use((req, res, next) => {
@@ -83,9 +71,18 @@ app.use((req, res, next) => {
   }
   
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log('Origin:', req.headers.origin || 'No origin');
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   
   // Log cookie presence for debugging auth issues
   console.log(`Cookie Present: ${req.headers.cookie ? 'Yes' : 'No'}`);
+  
+  // Log response headers for CORS debugging
+  const oldWriteHead = res.writeHead;
+  res.writeHead = function(statusCode, statusMessage, headers) {
+    console.log('Response Headers:', JSON.stringify(this.getHeaders(), null, 2));
+    return oldWriteHead.apply(this, arguments);
+  };
   
   // Track response completion
   res.on('finish', () => {
@@ -107,12 +104,6 @@ app.use(express.urlencoded({
   parameterLimit: 50000,
   extended: true
 }));
-
-// Static files (development only)
-if (process.env.NODE_ENV !== 'production') {
-  app.use(express.static(path.join(__dirname, 'public')));
-  app.use('/avatars', express.static(path.join(__dirname, 'public/avatars')));
-}
 
 // Database connection
 const connectToDatabase = async () => {
@@ -136,7 +127,6 @@ const connectToDatabase = async () => {
     console.log("Connected to MongoDB");
   } catch (err) {
     console.error("MongoDB connection failed:", err);
-    // Don't exit process in case of connection error - allow retry
   }
 };
 
@@ -149,9 +139,21 @@ app.get('/api/cors-test', (req, res) => {
     success: true,
     message: 'CORS is configured correctly',
     origin: req.headers.origin || 'No origin header',
-    allowedOrigins: allowedOrigins
+    allowedOrigins: allowedOrigins,
+    corsHeaders: {
+      'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin'),
+      'Access-Control-Allow-Credentials': res.getHeader('Access-Control-Allow-Credentials'),
+      'Access-Control-Allow-Methods': res.getHeader('Access-Control-Allow-Methods'),
+      'Access-Control-Allow-Headers': res.getHeader('Access-Control-Allow-Headers')
+    }
   });
 });
+
+// Important: Mount static routes first before the API routes
+if (process.env.NODE_ENV !== 'production') {
+  app.use(express.static(path.join(__dirname, 'public')));
+  app.use('/avatars', express.static(path.join(__dirname, 'public/avatars')));
+}
 
 // Mount auth routes at both /auth and /api/auth paths to handle the frontend URL inconsistency
 app.use("/auth", authRoutes);  // This allows direct /auth/check-account-status access
@@ -168,7 +170,11 @@ app.get('/api/health', (req, res) => {
     uptime: process.uptime(),
     timestamp: Date.now(),
     environment: process.env.NODE_ENV || 'development',
-    database: mongoose.connection.readyState ? 'connected' : 'disconnected'
+    database: mongoose.connection.readyState ? 'connected' : 'disconnected',
+    cors: {
+      allowedOrigins,
+      headers: res.getHeaders()
+    }
   };
   res.status(200).json(health);
 });
@@ -214,6 +220,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5173;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`CORS allowed origins:`, allowedOrigins);
   
   // Log additional info in development
   if (process.env.NODE_ENV !== 'production') {
@@ -236,12 +243,7 @@ app.listen(PORT, '0.0.0.0', () => {
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled Rejection:', err.message);
   console.error(err.stack);
-  // Don't exit the process as that would crash the server
 });
 
 // Export the app for serverless deployment
 module.exports = app;
-
-
-
-
