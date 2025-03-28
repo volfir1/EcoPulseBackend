@@ -1,22 +1,11 @@
-# Django and Core Packages
-Django==5.1.6
-djangorestframework==3.14.0
-django-cors-headers==4.3.0
-gunicorn==21.2.0
+pymongo
+python-dotenv
+django-cors-headers
+django-extensions
+pandas
+matplotlib
+scikit-learn
+openpyxl
+joblib
+numpy
 
-# Database and Environment
-pymongo==4.6.1
-dj-database-url==2.1.0
-python-dotenv==1.0.0
-whitenoise==6.6.0
-
-# Data Science and Analysis - Using pre-compiled wheels
-pandas==1.3.5
-matplotlib==3.5.3
-scikit-learn==1.0.2
-openpyxl==3.1.2
-joblib==1.3.2
-numpy==1.21.6
-
-# Django Extensions
-django-extensions==3.2.3

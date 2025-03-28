@@ -109,7 +109,14 @@ app.get('/api/cors-test', (req, res) => {
     }
   });
 });
-
+app.options('/api/auth/check-account-status', (req, res) => {
+  res.header('Access-Control-Allow-Origin', 'https://eco-pulse-final.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(204);
+});
 // Important: Mount static routes first before the API routes
 if (process.env.NODE_ENV !== 'production') {
   app.use(express.static(path.join(__dirname, 'public')));

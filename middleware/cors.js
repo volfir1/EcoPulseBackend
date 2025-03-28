@@ -7,7 +7,7 @@ const cors = require('cors');
  */
 const setupCors = (app) => {
   // Get environment variables
-  const NODE_ENV = process.env.NODE_ENV || 'development';
+  const NODE_ENV = process.env.NODE_ENV || 'development'; 
   const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
   
   // Parse comma-separated origins from environment variable if available
@@ -43,15 +43,15 @@ const setupCors = (app) => {
         return callback(null, true);
       }
       
-      // Allow any eco-pulse-final Vercel deployments with regex pattern matching
-      if (origin.match(/https:\/\/(.*\.)?eco-pulse-final(-git-[\w-]+)?\.vercel\.app/)) {
-        console.log("✅ Allowed Vercel deployment:", origin);
+      // Always allow the main frontend URL (highest priority)
+      if (origin === 'https://eco-pulse-final.vercel.app') {
+        console.log("✅ Frontend allowed:", origin);
         return callback(null, true);
       }
       
-      // Allow access from Railway backend
-      if (origin.includes('ecopulsebackend-production.up.railway.app')) {
-        console.log("✅ Allowed Railway backend:", origin);
+      // Allow any eco-pulse-final Vercel deployments with regex pattern matching
+      if (origin.match(/https:\/\/(.*\.)?eco-pulse-final(-git-[\w-]+)?\.vercel\.app/)) {
+        console.log("✅ Allowed Vercel deployment:", origin);
         return callback(null, true);
       }
       
@@ -79,23 +79,28 @@ const setupCors = (app) => {
       'X-Requested-With',
       'Accept',
       'Origin',
-      'Cache-Control'
+      'Cache-Control',
+      'Cookie',
+      'X-API-Key'
     ],
     exposedHeaders: ['Content-Length', 'X-Total-Count'],
     maxAge: 86400 // Cache preflight request results for 24 hours (in seconds)
   };
   
-  
   // Apply CORS middleware with our custom options
   app.use(cors(corsOptions));
   
   // Handle preflight OPTIONS requests explicitly
-  app.options('*', cors({
-    ...corsOptions,
-    // Railway requires specific handling for preflight
-    allowedHeaders: corsOptions.allowedHeaders.concat(['Cookie', 'X-API-Key']),
-    methods: ['OPTIONS'] // Explicitly state OPTIONS method
-  }));
+  app.options('*', cors(corsOptions));
+  
+  // Add a debugging route to verify CORS is working
+  app.get('/api/cors-test', (req, res) => {
+    res.json({
+      success: true,
+      message: 'CORS is working correctly',
+      requestOrigin: req.headers.origin || 'No origin'
+    });
+  });
   
   console.log('CORS middleware configured successfully');
 };
