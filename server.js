@@ -16,45 +16,42 @@ const app = express();
 app.use(compression());
 
 // Improved CORS configuration for credentials support
+// Improved CORS configuration
 app.use(cors({
   origin: function(origin, callback) {
     console.log("Request origin:", origin);
-
-    // Allow localhost and undefined origin (for non-browser requests)
-    if (!origin || origin.match(/http:\/\/localhost:\d+/)) {
-      return callback(null, true);
-    }
     
-    // Allow any eco-pulse-final Vercel deployments
-    if (origin.match(/https:\/\/eco-pulse-final[^.]*\.vercel\.app/)) {
-      console.log("✅ Allowed Vercel deployment:", origin);
-      return callback(null, true);
-    }
-    
-    // Allow Railway backend
-    if (origin.includes('ecopulsebackend-production.up.railway.app')) {
-      return callback(null, true);
-    }
-    
-    // Check against explicit allowed origins from env variable
+    // Parse allowed origins from environment variable
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',') 
+      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
       : [];
-      
-    if (allowedOrigins.includes(origin)) {
+    
+    console.log("Configured allowed origins:", allowedOrigins);
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
       return callback(null, true);
     }
     
-    // Block everything else in production
-    if (process.env.NODE_ENV === 'production') {
-      console.log("🚨 Blocked origin:", origin);
-      return callback(new Error('Not allowed by CORS'));
+    // Check if the origin is in our allowed list
+    if (allowedOrigins.includes(origin)) {
+      console.log("✅ Allowed origin:", origin);
+      return callback(null, true);
     }
     
-    // Allow all origins in development
-    return callback(null, true);
+    // Also allow localhost in any case
+    if (origin.match(/http:\/\/localhost:\d+/)) {
+      console.log("✅ Allowed localhost:", origin);
+      return callback(null, true);
+    }
+    
+    // Log and reject other origins
+    console.log("🚨 Blocked origin:", origin);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Ensure credentials header is always set
