@@ -1,0 +1,11 @@
+meta {
+  name: CHECK EMAIL EXIST
+  type: http
+  seq: 10
+}
+
+get {
+  url: http://localhost:5000/api/auth/verify-email-exists
+  body: none
+  auth: inherit
+}

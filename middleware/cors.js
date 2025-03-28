@@ -24,6 +24,7 @@ const setupCors = (app) => {
     
     // Render backend
     'https://ecopulsebackend-1.onrender.com',
+    'https://ecopulsebackend.onrender.com',
     // Local development
     'http://localhost:8000',
     'http://localhost:5173',
