@@ -1,16 +1,23 @@
-pymongo
-python-dotenv
-django-cors-headers
-django-extensions
-pandas
-matplotlib
-scikit-learn
-openpyxl
-joblib
-numpy
-
+# Django and Core Packages
 Django==5.1.6
 djangorestframework==3.14.0
 django-cors-headers==4.3.0
-pymongo==4.6.1
 gunicorn==21.2.0
+
+# Database and Environment
+pymongo==4.6.1
+djongo==1.3.6
+dj-database-url==2.1.0
+python-dotenv==1.0.0
+whitenoise==6.6.0
+
+# Data Science and Analysis
+pandas==2.2.1
+matplotlib==3.8.3
+scikit-learn==1.4.1
+openpyxl==3.1.2
+joblib==1.3.2
+numpy==1.26.4
+
+# Django Extensions
+django-extensions==3.2.3

@@ -134,7 +134,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # MongoDB connection details
-MONGO_URL = os.getenv("PY_MONGO_URL")  # Load MongoDB URI from environment variables
+MONGO_URL = os.getenv("MONGO_URL")  # Load MongoDB URI from environment variables
 DATABASE_NAME = "ecopulse"  # Database name
 RECOMMENDATION_COLLECTION = "recommendation"  # Collection name for recommendations
 
