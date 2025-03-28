@@ -14,21 +14,45 @@ const app = express();
 // Enable compression
 app.use(compression());
 
-// Single consolidated CORS configuration
+// Parse the ALLOWED_ORIGINS environment variable
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : [
+      'https://eco-pulse-final.vercel.app', 
+      'http://localhost:5173',
+      'https://eco-pulse-final-git-main-eco-pulse.vercel.app',
+      'https://hopeful-appreciation-production.up.railway.app',
+      'https://ecopulsebackend-production.up.railway.app',
+      'https://django-server-production-dac6.up.railway.app'
+    ];
+
+// Enhanced CORS middleware
 app.use((req, res, next) => {
-  const allowedOrigins = [
-    'https://eco-pulse-final.vercel.app', 
-    'http://localhost:5173',
-    'https://eco-pulse-final-git-main-eco-pulse.vercel.app',
-    'https://hopeful-appreciation-production.up.railway.app',
-    'https://ecopulsebackend-production.up.railway.app',
-    'https://django-server-production-dac6.up.railway.app'
-  ];
-  
   const origin = req.headers.origin;
-  console.log("Request origin:", origin);
   
-  // Set CORS headers if origin is allowed
+  // Explicitly handle preflight OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    // Set CORS headers if origin is allowed
+    if (allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      console.log("✅ Allowed origin for OPTIONS:", origin);
+    } else if (origin && origin.match(/http:\/\/localhost:\d+/)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      console.log("✅ Allowed localhost for OPTIONS:", origin);
+    } else if (origin) {
+      console.log("🚨 Blocked origin for OPTIONS:", origin);
+      // Don't return error status for OPTIONS, just don't set the CORS headers
+    }
+    
+    // Set other required CORS headers
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    return res.status(204).end();
+  }
+  
+  // For non-OPTIONS requests, set CORS headers if origin is allowed
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     console.log("✅ Allowed origin:", origin);
@@ -44,10 +68,27 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   
-  // Handle preflight OPTIONS requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  next();
+});
+
+// Enhanced debug logging middleware
+app.use((req, res, next) => {
+  // Skip logging for common static resources
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico)$/)) {
+    return next();
   }
+  
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`Origin: ${req.headers.origin || 'No origin'}`);
+  console.log(`User-Agent: ${req.headers['user-agent'] || 'No user-agent'}`);
+  
+  // Log cookie presence for debugging auth issues
+  console.log(`Cookie Present: ${req.headers.cookie ? 'Yes' : 'No'}`);
+  
+  // Track response completion
+  res.on('finish', () => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ${res.statusCode}`);
+  });
   
   next();
 });
@@ -105,20 +146,18 @@ app.get('/api/cors-test', (req, res) => {
     success: true,
     message: 'CORS is configured correctly',
     origin: req.headers.origin || 'No origin header',
-    allowedOrigins: [
-      "http://localhost:5173",
-      "http://localhost:8000",
-      "http://localhost:8080",
-      "https://eco-pulse-final.vercel.app",
-      "https://eco-pulse-final-git-main-eco-pulse.vercel.app",
-      "https://hopeful-appreciation-production.up.railway.app",
-      "https://ecopulsebackend-production.up.railway.app"
-    ]
+    allowedOrigins: allowedOrigins
   });
 });
 
-// API Routes
-app.use("/api/auth", require("./routes/authRoutes"));
+// Get auth routes
+const authRoutes = require("./routes/authRoutes");
+
+// Mount auth routes at both /auth and /api/auth paths to handle the path mismatch
+app.use("/auth", authRoutes);  // This allows direct /auth/check-account-status access
+app.use("/api/auth", authRoutes);  // Keep the original /api/auth path
+
+// Other API Routes
 app.use('/api/users', userRoutes);
 app.use('/api/ticket', ticketRoutes);
 app.use('/api/upload', uploadRoutes);
