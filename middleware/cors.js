@@ -20,6 +20,7 @@ const setupCors = (app) => {
     FRONTEND_URL,
     // Vercel deployments - UPDATED to include both domain patterns
     'https://ecopulse-delta.vercel.app',
+    'https://ecopulse-alpha.vercel.app',
     // Railway backend
     
     // Render backend
