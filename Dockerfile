@@ -17,8 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Set environment variable for port
-ENV PORT=8000
-
 # Run migrations and then start Gunicorn
-CMD python manage.py migrate && python manage.py collectstatic --noinput --no-post-process && gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-8000}
+# Use a default port of 8000 if PORT isn't set
+CMD python manage.py migrate && python manage.py collectstatic --noinput --no-post-process && gunicorn backend.wsgi:application --bind 0.0.0.0:8000
