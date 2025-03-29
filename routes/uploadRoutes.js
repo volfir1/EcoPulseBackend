@@ -13,7 +13,6 @@ router.post('/avatar', upload.single('avatar'), uploadAvatar);
 
 // Route for handling base64 encoded images (direct upload from web)
 router.post('/avatar/base64',base64AvatarLimiter, uploadBase64Avatar);
-router.post('/avatar',base64AvatarLimiter, uploadBase64Avatar);
 // Route for default avatar uploads
 router.post('/default-avatar', uploadDefaultAvatar);
 

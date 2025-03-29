@@ -2,8 +2,6 @@
 const express = require("express");
 const { body } = require("express-validator");
 const authController = require("../controllers/authController");
-const accountController = require("../controllers/accountController");
-const userController = require("../controllers/userController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 const router = express.Router();
@@ -27,7 +25,6 @@ const{
   checkAccountStatus,
   checkDeactivatedAccount,
   adminDeactivateUser,
-  debugAutoDeactivatedAccounts
 } = require('../controllers/accountController');
 
 const{
@@ -85,13 +82,9 @@ router.get('/verify', authMiddleware, verifyAuth);
 // Admin routes (require auth and admin role)
 router.get('/users', authMiddleware, adminMiddleware, getAllUsers);
 router.get('/users/deactivated', authMiddleware, adminMiddleware, getDeactivatedUsers);
-router.post('/users/query', authMiddleware, adminMiddleware, getDeactivatedUsers);
 router.put('/users/:userId/role', authMiddleware, adminMiddleware, updateUserRole);
 router.post('/admin/deactivate-user', authMiddleware, adminMiddleware, adminDeactivateUser);
 
-// Debug routes
-router.get('/debug/email-service', accountController.debugEmailService);
-router.get('/debug/deactivated-accounts', authMiddleware, adminMiddleware, debugAutoDeactivatedAccounts);
 
 router.get('/verify-token', async (req, res) => {
   try {
@@ -146,4 +139,5 @@ router.get('/verify-token', async (req, res) => {
     });
   }
 });
+
 module.exports = router;

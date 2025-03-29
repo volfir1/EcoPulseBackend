@@ -36,7 +36,6 @@ router.put('/:id/password', authMiddleware, changePassword);
 router.delete('/:id', authMiddleware, softDeleteUser);
 
 // Admin routes
-router.get('/all', authMiddleware, adminMiddleware, getAllDeactivated);
 router.put('/:id/restore', authMiddleware, adminMiddleware, restoreUser);
 
 module.exports = router;

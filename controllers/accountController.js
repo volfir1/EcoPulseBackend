@@ -8,10 +8,7 @@ const { getFrontendURL } = require('../utils/helper');
 
 
 
-/**
- * Deactivate a user account (soft delete)
- * @route POST /api/auth/deactivate-account
- */
+//Deactivate a user account (soft delete)
 exports.deactivateAccount = async (req, res) => {
   try {
     // Get the user ID from the authenticated user
@@ -101,11 +98,7 @@ exports.deactivateAccount = async (req, res) => {
   }
 };
 
-
-/**
- * Reactivate an auto-deactivated account using a token
- * @route POST /api/auth/reactivate-account
- */
+//Reactivate an auto-deactivated account using a token
 exports.reactivateAccount = async (req, res) => {
   try {
     // Get token from query params or body
@@ -266,259 +259,116 @@ exports.reactivateAccount = async (req, res) => {
   }
 };
 
-
-/**
- * Check account status - use this to see if an account is deactivated
- * @route POST /api/auth/check-account-status
- */
+// Check account status - use this to see if an account is deactivated
 exports.checkAccountStatus = async (req, res) => {
-  try {
-    const { email } = req.body;
+  const { email } = req.body;
 
-    if (!email) {
+  // 1. Input Validation
+  if (!email) {
       return res.status(400).json({
-        success: false,
-        message: "Email is required"
+          success: false,
+          message: "Email is required",
       });
-    }
+  }
 
-    // Use a direct MongoDB query to get user regardless of active status
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    const user = await usersCollection.findOne({ email: email });
-    
-    if (!user) {
-      return res.status(200).json({
-        success: true,
-        exists: false,
-        message: "No account found with this email"
-      });
-    }
+  try {
+      // 2. Database Query
+      const db = mongoose.connection.db;
+      const usersCollection = db.collection('users');
 
-    // Check account status
-    if (user.isAutoDeactivated) {
-      // Generate a new reactivation token if needed
-      let reactivationToken = user.reactivationToken;
-      let tokenExpired = false;
-      
-      // Check if token is expired or doesn't exist
-      if (!reactivationToken || 
-          !user.reactivationTokenExpires || 
-          new Date(user.reactivationTokenExpires) < new Date()) {
-        
-        // Token is expired, note this but don't generate a new one yet
-        tokenExpired = true;
+      // Find user and project only necessary fields for efficiency
+      const user = await usersCollection.findOne(
+          { email: email.toLowerCase() }, // Query by lowercase email for case-insensitivity
+          {
+              projection: {
+                  _id: 1, // Good to include explicitly
+                  isDeactivated: 1, // Manual deactivation flag
+                  isAutoDeactivated: 1, // Auto deactivation flag
+                  autoDeactivatedAt: 1, // Timestamp for auto deactivation
+                  reactivationToken: 1, // Needed for token check
+                  reactivationTokenExpires: 1, // Needed for token check
+                  googleId: 1, // To check if Google linked
+                  password: 1, // To check if password is set (adjust field name if needed, e.g., passwordHash)
+                  lockoutUntil: 1 // Assuming you have a field for reactivation lockout
+              }
+          }
+      );
+
+      // 3. Handle User Not Found
+      if (!user) {
+          return res.status(200).json({ // 200 OK, as the *check* succeeded, even if user doesn't exist
+              success: true,
+              exists: false,
+              message: "No account found with this email.",
+              // Default flags for non-existent user
+              isActive: false,
+              isGoogleLinked: false,
+              hasPasswordSet: false,
+              isAutoDeactivated: false,
+              tokenExpired: false,
+              lockoutRemaining: 0,
+          });
       }
 
+      // 4. Calculate Derived Status Flags for Existing User
+      const isGoogleLinked = !!user.googleId;
+      const hasPasswordSet = !!user.password; // Adjust field name if needed (e.g., user.passwordHash)
+      const isActive = !user.isDeactivated && !user.isAutoDeactivated;
+
+      // Check for reactivation lockout
+      const now = new Date();
+      let lockoutRemaining = 0;
+      if (user.lockoutUntil && new Date(user.lockoutUntil) > now) {
+          lockoutRemaining = Math.max(0, Math.round((new Date(user.lockoutUntil) - now) / 1000)); // Remaining seconds
+      }
+
+      // 5. Handle Specific Status Cases
+
+      // Case A: Auto Deactivated
+      if (user.isAutoDeactivated) {
+          let tokenExpired = false;
+          if (!user.reactivationToken || !user.reactivationTokenExpires || new Date(user.reactivationTokenExpires) < now) {
+              tokenExpired = true;
+          }
+
+          return res.status(200).json({
+              success: true,
+              exists: true,
+              isActive: false, // Explicitly false
+              isAutoDeactivated: true,
+              deactivatedAt: user.autoDeactivatedAt, // Provide timestamp
+              tokenExpired: tokenExpired,
+              isGoogleLinked: isGoogleLinked,
+              hasPasswordSet: hasPasswordSet,
+              lockoutRemaining: lockoutRemaining, // Include lockout info
+              message: "This account has been deactivated due to inactivity." + (lockoutRemaining > 0 ? ` Reactivation is locked for ${Math.ceil(lockoutRemaining/60)} more minutes.` : '')
+          });
+      }
+
+      // Case B: Manually Deactivated or Active
+      // isActive variable already calculated covers both
       return res.status(200).json({
-        success: true,
-        exists: true,
-        isActive: false,
-        isAutoDeactivated: true,
-        deactivatedAt: user.autoDeactivatedAt,
-        tokenExpired: tokenExpired,
-        message: "This account has been deactivated due to inactivity."
+          success: true,
+          exists: true,
+          isActive: isActive,
+          isAutoDeactivated: false, // Explicitly false
+          isGoogleLinked: isGoogleLinked,
+          hasPasswordSet: hasPasswordSet,
+          lockoutRemaining: 0, // No lockout concept for manual deactivation/active usually
+          message: isActive ? "Account is active." : "This account has been manually deactivated."
       });
-    }
 
-    // Account exists and is active
-    return res.status(200).json({
-      success: true,
-      exists: true,
-      isActive: !user.isDeactivated,
-      message: user.isDeactivated ? "This account has been manually deleted." : "Account is active."
-    });
   } catch (error) {
-    console.error("Check account status error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message
-    });
-  }
-};
-
-/**
- * Request a new reactivation token for an auto-deactivated account
- * @route POST /api/auth/request-reactivation
- */
-// exports.requestReactivation = async (req, res) => {
-//   try {
-//     const { email } = req.body;
-
-//     if (!email) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Email is required"
-//       });
-//     }
-
-//     // Find the auto-deactivated user directly from MongoDB
-//     const db = mongoose.connection.db;
-//     const usersCollection = db.collection('users');
-//     const user = await usersCollection.findOne({ 
-//       email: email,
-//       isAutoDeactivated: true 
-//     });
-    
-//     // For security, don't reveal if user exists or not
-//     if (!user) {
-//       return res.status(200).json({
-//         success: true,
-//         message: "If your account exists and is deactivated, a reactivation email will be sent."
-//       });
-//     }
-
-//     // Generate a new reactivation token
-//     const reactivationToken = crypto.randomBytes(32).toString("hex");
-    
-//     // Update user with new token
-//     await usersCollection.updateOne(
-//       { _id: user._id },
-//       { 
-//         $set: {
-//           reactivationToken: reactivationToken,
-//           reactivationTokenExpires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
-//           lastReactivationAttempt: new Date(),
-//           reactivationAttempts: (user.reactivationAttempts || 0) + 1
-//         }
-//       }
-//     );
-
-//     // Create a user object for the email service
-//     const userForEmail = {
-//       _id: user._id,
-//       email: user.email,
-//       firstName: user.firstName || 'User',
-//       lastName: user.lastName || ''
-//     };
-
-//     // Send reactivation email
-//     const emailService = require('../utils/emailService');
-//     try {
-//       await emailService.sendReactivationConfirmationEmail(userForEmail, reactivationToken);
-//       console.log(`Reactivation email sent to ${email}`);
-//     } catch (emailError) {
-//       console.error("Error sending reactivation email:", emailError);
-//       // Continue even if email fails
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: "If your account exists and is deactivated, a reactivation email has been sent."
-//     });
-//   } catch (error) {
-//     console.error("Reactivation request error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//       error: error.message
-//     });
-//   }
-// };
-
-/**
- * Debug function to get information about auto-deactivated accounts
- * @route GET /api/auth/debug/deactivated-accounts
- */
-exports.debugAutoDeactivatedAccounts = async (req, res) => {
-  try {
-    // Get all auto-deactivated users
-    const users = await User.find({
-      isAutoDeactivated: true
-    }).select('email firstName lastName isAutoDeactivated autoDeactivatedAt reactivationToken reactivationTokenExpires lastReactivationAttempt');
-    
-    // Format user data for display
-    const formattedUsers = users.map(user => ({
-      id: user._id.toString(),
-      email: user.email,
-      name: `${user.firstName} ${user.lastName}`,
-      deactivatedAt: user.autoDeactivatedAt,
-      hasReactivationToken: Boolean(user.reactivationToken),
-      tokenFirstChars: user.reactivationToken ? user.reactivationToken.substring(0, 10) : null,
-      tokenLength: user.reactivationToken ? user.reactivationToken.length : 0,
-      tokenExpires: user.reactivationTokenExpires,
-      isExpired: user.reactivationTokenExpires ? user.reactivationTokenExpires < new Date() : null,
-      lastReactivationAttempt: user.lastReactivationAttempt
-    }));
-    
-    res.json({
-      success: true,
-      count: formattedUsers.length,
-      users: formattedUsers
-    });
-  } catch (error) {
-    console.error('Debug auto-deactivated accounts error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Debug email service configuration
- * @route GET /api/auth/debug/email-service
- */
-exports.debugEmailService = async (req, res) => {
-  try {
-    console.log('Checking email service configuration...');
-    
-    // Try to import the email service directly
-    let emailServiceModule;
-    try {
-      emailServiceModule = require('../utils/emailService');
-      console.log('Email service module imported successfully');
-    } catch (err) {
-      console.error('Failed to import email service:', err);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to import email service module',
-        error: err.message
+      // 6. Handle Server Errors
+      console.error("Check account status error:", error);
+      res.status(500).json({
+          success: false,
+          message: "Server error checking account status.",
+          // Optionally include error details in development
+          error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
-    }
-    
-    // Check if the required functions exist
-    const serviceInfo = {
-      sendVerificationEmail: typeof emailServiceModule.sendVerificationEmail === 'function',
-      sendGoogleVerificationEmail: typeof emailServiceModule.sendGoogleVerificationEmail === 'function',
-      sendPasswordResetEmail: typeof emailServiceModule.sendPasswordResetEmail === 'function',
-      sendAutoDeactivationEmail: typeof emailServiceModule.sendAutoDeactivationEmail === 'function',
-      sendReactivationConfirmationEmail: typeof emailServiceModule.sendReactivationConfirmationEmail === 'function',
-      sendAdminNotification: typeof emailServiceModule.sendAdminNotification === 'function',
-      serviceStructure: Object.keys(emailServiceModule)
-    };
-    
-    // Look at the email service configuration
-    let emailConfig = null;
-    try {
-      emailConfig = {
-        host: process.env.EMAIL_HOST || 'Not configured',
-        port: process.env.EMAIL_PORT || 'Not configured',
-        secure: process.env.EMAIL_SECURE === 'true',
-        hasUsername: !!process.env.EMAIL_USER,
-        hasPassword: !!process.env.EMAIL_PASS
-      };
-    } catch (configErr) {
-      console.error('Error accessing email configuration:', configErr);
-    }
-    
-    return res.json({
-      success: true,
-      emailService: serviceInfo,
-      emailConfig: emailConfig
-    });
-  } catch (error) {
-    console.error('Email service debug error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
   }
 };
-
 
 exports.adminDeactivateUser = async (req, res) => {
   try {
@@ -562,7 +412,6 @@ exports.adminDeactivateUser = async (req, res) => {
     // Update user to deactivated status
     user.isDeactivated = true;
     user.deletedAt = new Date();
-    user.deactivatedBy = req.user.id; // Record who deactivated the account
     user.reactivationToken = reactivationToken;
     user.reactivationTokenExpires = reactivationTokenExpires;
     
@@ -591,11 +440,7 @@ exports.adminDeactivateUser = async (req, res) => {
   }
 };
 
-
-/**
- * Request a reactivation token for a deactivated account
- * @route POST /api/auth/request-reactivation
- */
+// Request a reactivation token for a deactivated account
 exports.requestReactivation = async (req, res) => {
   try {
     const { email } = req.body;
@@ -673,6 +518,7 @@ exports.requestReactivation = async (req, res) => {
   }
 };
 
+
 exports.checkDeactivatedAccount = async (req, res) => {
   try {
     const { email } = req.body;
@@ -727,71 +573,66 @@ exports.checkDeactivatedAccount = async (req, res) => {
   }
 };
 
-/**
- * Check account status
- * @route POST /api/auth/check-account-status
- */
-exports.checkAccountStatus = async (req, res) => {
-  try {
-    const { email } = req.body;
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required"
-      });
-    }
+//     const { email } = req.body;
 
-    // Use a direct MongoDB query to get user regardless of active status
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    const user = await usersCollection.findOne({ email });
+//     if (!email) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Email is required"
+//       });
+//     }
+
+//     // Use a direct MongoDB query to get user regardless of active status
+//     const db = mongoose.connection.db;
+//     const usersCollection = db.collection('users');
+//     const user = await usersCollection.findOne({ email });
     
-    if (!user) {
-      return res.status(200).json({
-        success: true,
-        exists: false,
-        message: "No account found with this email"
-      });
-    }
+//     if (!user) {
+//       return res.status(200).json({
+//         success: true,
+//         exists: false,
+//         message: "No account found with this email"
+//       });
+//     }
 
-    // Check account status
-    if (user.isDeactivated || user.isAutoDeactivated) {
-      // Check if there's a reactivation token and if it's expired
-      let tokenExpired = false;
-      if (!user.reactivationToken || 
-          !user.reactivationTokenExpires || 
-          new Date(user.reactivationTokenExpires) < new Date()) {
-        tokenExpired = true;
-      }
+//     // Check account status
+//     if (user.isDeactivated || user.isAutoDeactivated) {
+//       // Check if there's a reactivation token and if it's expired
+//       let tokenExpired = false;
+//       if (!user.reactivationToken || 
+//           !user.reactivationTokenExpires || 
+//           new Date(user.reactivationTokenExpires) < new Date()) {
+//         tokenExpired = true;
+//       }
 
-      return res.status(200).json({
-        success: true,
-        exists: true,
-        isActive: false,
-        isDeactivated: !!user.isDeactivated,
-        isAutoDeactivated: !!user.isAutoDeactivated,
-        deactivatedAt: user.deletedAt || user.autoDeactivatedAt,
-        tokenExpired,
-        message: user.isAutoDeactivated 
-          ? "This account has been deactivated due to inactivity." 
-          : "This account has been deactivated."
-      });
-    }
+//       return res.status(200).json({
+//         success: true,
+//         exists: true,
+//         isActive: false,
+//         isDeactivated: !!user.isDeactivated,
+//         isAutoDeactivated: !!user.isAutoDeactivated,
+//         deactivatedAt: user.deletedAt || user.autoDeactivatedAt,
+//         tokenExpired,
+//         message: user.isAutoDeactivated 
+//           ? "This account has been deactivated due to inactivity." 
+//           : "This account has been deactivated."
+//       });
+//     }
 
-    // Account exists and is active
-    return res.status(200).json({
-      success: true,
-      exists: true,
-      isActive: true,
-      message: "Account is active."
-    });
-  } catch (error) {
-    console.error("Check account status error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message
-    });
-  }
-};
+//     // Account exists and is active
+//     return res.status(200).json({
+//       success: true,
+//       exists: true,
+//       isActive: true,
+//       message: "Account is active."
+//     });
+//   } catch (error) {
+//     console.error("Check account status error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: error.message
+//     });
+//   }
+// };

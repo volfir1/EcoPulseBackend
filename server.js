@@ -3,13 +3,14 @@ const path = require("path");
 require("dotenv").config();
 const mongoose = require("mongoose");
 const cookieParser = require("cookie-parser");
+const compression = require('compression');
+const setupCors = require('./middleware/cors');
+
+// Route imports
+const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const ticketRoutes = require("./routes/ticketRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
-const compression = require('compression');
-// Replace direct cors import with setupCors middleware
-const setupCors = require('./middleware/cors');
-const authRoutes = require("./routes/authRoutes");
 
 // Create Express app
 const app = express();  
@@ -20,8 +21,8 @@ app.use(compression());
 // Apply the CORS configuration from cors.js middleware
 setupCors(app);
 
-// Add explicit CORS headers for the problematic endpoints
-app.use('/api/auth/check-account-status', (req, res, next) => {
+// Create a reusable CORS handler for specific routes
+const applySpecificCors = (req, res, next) => {
   const origin = req.headers.origin;
   
   // Set headers explicitly for this route
@@ -39,26 +40,11 @@ app.use('/api/auth/check-account-status', (req, res, next) => {
   }
   
   next();
-});
+};
 
-// Also handle the direct /auth route
-app.use('/auth/check-account-status', (req, res, next) => {
-  const origin = req.headers.origin;
-  
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-  
-  if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key');
-    res.header('Access-Control-Max-Age', '86400');
-    return res.sendStatus(204);
-  }
-  
-  next();
-});
+// Apply the specific CORS handler to problematic routes
+app.use('/api/auth/check-account-status', applySpecificCors);
+app.use('/auth/check-account-status', applySpecificCors);
 
 // Enhanced debug logging middleware
 app.use((req, res, next) => {
@@ -67,12 +53,16 @@ app.use((req, res, next) => {
     return next();
   }
   
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  const requestStart = Date.now();
+  const timestamp = new Date().toISOString();
+  
+  console.log(`[${timestamp}] ${req.method} ${req.path}`);
   console.log('Origin:', req.headers.origin || 'No origin');
   
-  // Track response completion
+  // Track response completion with timing
   res.on('finish', () => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} -> ${res.statusCode}`);
+    const duration = Date.now() - requestStart;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} -> ${res.statusCode} (${duration}ms)`);
   });
   
   next();
@@ -91,29 +81,45 @@ app.use(express.urlencoded({
   extended: true
 }));
 
-// Database connection
-const connectToDatabase = async () => {
-  if (mongoose.connection.readyState) {
+// Improved database connection with retry
+const connectToDatabase = async (retries = 5, interval = 5000) => {
+  if (mongoose.connection.readyState === 1) {
     console.log('Using existing MongoDB connection');
-    return;
+    return true;
   }
   
   const mongoUrl = process.env.MONGO_URL;
   if (!mongoUrl) {
     console.error("Error: MONGO_URL environment variable is not set.");
-    return;
+    return false;
   }
 
-  try {
-    await mongoose.connect(mongoUrl, {
-      serverSelectionTimeoutMS: 5000,
-      maxPoolSize: 10,
-      socketTimeoutMS: 45000
-    });
-    console.log("Connected to MongoDB");
-  } catch (err) {
-    console.error("MongoDB connection failed:", err);
+  let currentRetry = 0;
+  
+  while (currentRetry < retries) {
+    try {
+      await mongoose.connect(mongoUrl, {
+        serverSelectionTimeoutMS: 5000,
+        maxPoolSize: 10,
+        socketTimeoutMS: 45000
+      });
+      console.log("Connected to MongoDB");
+      return true;
+    } catch (err) {
+      currentRetry++;
+      console.error(`MongoDB connection attempt ${currentRetry} failed:`, err.message);
+      
+      if (currentRetry >= retries) {
+        console.error("All MongoDB connection attempts failed");
+        return false;
+      }
+      
+      console.log(`Retrying in ${interval / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, interval));
+    }
   }
+  
+  return false;
 };
 
 // Connect to MongoDB immediately
@@ -139,13 +145,14 @@ app.get('/api/cors-test', (req, res) => {
   });
 });
 
-// Important: Mount static routes first before the API routes
+// Static routes setup
 if (process.env.NODE_ENV !== 'production') {
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/avatars', express.static(path.join(__dirname, 'public/avatars')));
 }
 
-// Mount auth routes at both /auth and /api/auth paths to handle the frontend URL inconsistency
+// API Routes - maintain original dual mount points for auth routes
+// to preserve backwards compatibility
 app.use("/auth", authRoutes);  // This allows direct /auth/check-account-status access
 app.use("/api/auth", authRoutes);  // This allows /api/auth/check-account-status access
 
@@ -154,17 +161,25 @@ app.use('/api/users', userRoutes);
 app.use('/api/ticket', ticketRoutes);
 app.use('/api/upload', uploadRoutes);
 
-// Health check endpoint
+// Health check endpoint with improved database status
 app.get('/api/health', (req, res) => {
+  const dbStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  
   const health = {
     uptime: process.uptime(),
     timestamp: Date.now(),
     environment: process.env.NODE_ENV || 'development',
-    database: mongoose.connection.readyState ? 'connected' : 'disconnected',
+    database: {
+      state: dbStates[mongoose.connection.readyState] || 'unknown',
+      connected: mongoose.connection.readyState === 1,
+      models: Object.keys(mongoose.models).length
+    },
+    memoryUsage: process.memoryUsage(),
     cors: {
       headers: res.getHeaders()
     }
   };
+  
   res.status(200).json(health);
 });
 
@@ -194,10 +209,19 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-// Global error handler
+// Consolidated error handler
 app.use((err, req, res, next) => {
-  console.error(`Error: ${err.message}`);
-  console.error(err.stack);
+  // Create a unified error log entry
+  const errorDetails = {
+    message: err.message,
+    stack: err.stack,
+    url: req.originalUrl,
+    method: req.method,
+    ip: req.ip,
+    timestamp: new Date().toISOString()
+  };
+  
+  console.error('Application error:', errorDetails);
   
   res.status(err.statusCode || 500).json({
     success: false,
@@ -227,10 +251,13 @@ app.listen(PORT, '0.0.0.0', () => {
   }
 });
 
-// Handle unhandled promise rejections
+// Centralized unhandled rejection handler
 process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Rejection:', err.message);
-  console.error(err.stack);
+  console.error('Unhandled Promise Rejection:', {
+    message: err.message,
+    stack: err.stack,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Export the app for serverless deployment

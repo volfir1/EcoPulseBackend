@@ -17,6 +17,11 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+
+const generateVerificationCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
 // Existing function for verification emails
 const getEmailTemplate = (verificationCode, isGoogleSignIn = false) => {
   return `
@@ -37,28 +42,6 @@ const getEmailTemplate = (verificationCode, isGoogleSignIn = false) => {
       <p>If you did not ${
         isGoogleSignIn ? 'attempt to sign in with Google' : 'create an account'
       }, you can safely ignore this email.</p>
-      
-      <p>Thank you,<br>The EcoPulse Team</p>
-    </div>
-  `;
-};
-
-const generateVerificationCode = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
-// New function to generate the HTML template for password reset email
-const getResetEmailTemplate = (resetUrl) => {
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2C7A51;">Reset Your Password</h2>
-      <p>We received a request to reset your password. Please click the link below to choose a new password:</p>
-      
-      <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; font-size: 18px; margin: 20px 0;">
-        <a href="${resetUrl}" style="color: #2C7A51; text-decoration: none;">Reset Password</a>
-      </div>
-      
-      <p>This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.</p>
       
       <p>Thank you,<br>The EcoPulse Team</p>
     </div>
@@ -173,17 +156,19 @@ const sendPasswordResetEmail = async (user, fullToken, shortCode, platform = 'un
     // Platform detection
     const isMobile = ['android', 'ios'].includes(platform.toLowerCase());
     
-    // Email template
+    // Email template with fallback for logo
     const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <!-- Header -->
       <div style="text-align: center; margin-bottom: 20px;">
-        <img src="${process.env.LOGO_URL}" alt="Company Logo" style="max-width: 150px;">
+        ${process.env.LOGO_URL ? 
+          `<img src="${process.env.LOGO_URL}" alt="Company Logo" style="max-width: 150px;">` : 
+          `<h1 style="color: #4CAF50;">EcoPulse</h1>`}
       </div>
 
       <!-- Main Content -->
       <h2 style="color: #4CAF50; text-align: center;">Password Reset Request</h2>
-      <p>Hello ${user.name || 'there'},</p>
+      <p>Hello ${user.firstName || user.name || 'there'},</p>
       <p>We received a password reset request. Use the button below within 1 hour:</p>
 
       <!-- Reset Button -->
@@ -209,6 +194,12 @@ const sendPasswordResetEmail = async (user, fullToken, shortCode, platform = 'un
         </p>
       </div>
 
+      <!-- Direct Link as Fallback -->
+      <div style="margin-top: 20px; font-size: 0.9em; color: #666;">
+        <p>If the button above doesn't work, copy and paste this link into your browser:</p>
+        <a href="${webResetUrl}" style="word-break: break-all; color: #4CAF50;">${webResetUrl}</a>
+      </div>
+
       <!-- Footer -->
       <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
         <p style="color: #666; font-size: 0.9em;">
@@ -218,98 +209,153 @@ const sendPasswordResetEmail = async (user, fullToken, shortCode, platform = 'un
     </div>
     `;
 
-    // Send email
-    const info = await transporter.sendMail({
-      from: `EcoPulse Support <${process.env.EMAIL_FROM}>`,
-      to: user.email,
-      subject: 'Password Reset Instructions',
-      html: html,
-      text: `Please use this code to reset your password: ${shortCode}\nOr use this link: ${isMobile ? appSchemeUrl : webResetUrl}`
-    });
+    // Try with primary email provider first
+    let result;
+    try {
+      console.log(`Attempting to send password reset email to ${user.email} with primary provider`);
+      
+      result = await transporter.sendMail({
+        from: `EcoPulse Support <${process.env.EMAIL_FROM}>`,
+        to: user.email,
+        subject: 'Password Reset Instructions',
+        html: html,
+        text: `Please use this code to reset your password: ${shortCode}\nOr use this link: ${isMobile ? appSchemeUrl : webResetUrl}`
+      });
+      
+      console.log(`Password reset email sent to ${user.email} using primary provider`, {
+        messageId: result.messageId,
+        platform,
+        shortCode,
+        deliveryTime: new Date().toISOString()
+      });
+    } catch (primaryError) {
+      console.error('Detailed primary SMTP error:', {
+        code: primaryError.code,
+        command: primaryError.command,
+        responseCode: primaryError.responseCode,
+        response: primaryError.response,
+        message: primaryError.message,
+        stack: primaryError.stack
+      });
+      
+      // Try with backup provider if available
+      if (process.env.BACKUP_EMAIL_SERVICE && process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASSWORD) {
+        console.log('Attempting to use backup email provider...');
+        
+        const backupTransporter = nodemailer.createTransport({
+          service: process.env.BACKUP_EMAIL_SERVICE,
+          host: process.env.BACKUP_EMAIL_HOST || undefined,
+          port: process.env.BACKUP_EMAIL_PORT || undefined,
+          secure: process.env.BACKUP_EMAIL_SECURE === 'true',
+          auth: {
+            user: process.env.BACKUP_EMAIL_USER,
+            pass: process.env.BACKUP_EMAIL_PASSWORD
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        });
+        
+        try {
+          result = await backupTransporter.sendMail({
+            from: `EcoPulse Support <${process.env.BACKUP_EMAIL_USER}>`,
+            to: user.email,
+            subject: 'Password Reset Instructions',
+            html: html,
+            text: `Please use this code to reset your password: ${shortCode}\nOr use this link: ${isMobile ? appSchemeUrl : webResetUrl}`
+          });
+          
+          console.log(`Password reset email sent to ${user.email} using backup provider`, {
+            messageId: result.messageId,
+            platform,
+            shortCode,
+            deliveryTime: new Date().toISOString()
+          });
+        } catch (backupError) {
+          console.error('Backup email provider also failed:', {
+            code: backupError.code,
+            command: backupError.command,
+            responseCode: backupError.responseCode,
+            response: backupError.response,
+            message: backupError.message
+          });
+          
+          // Use a direct SMTP connection as last resort
+          try {
+            const lastResortTransporter = nodemailer.createTransport({
+              host: 'smtp.gmail.com',
+              port: 587,
+              secure: false,
+              auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_APP_PASSWORD
+              },
+              tls: {
+                rejectUnauthorized: false
+              }
+            });
+            
+            console.log('Attempting direct SMTP connection as last resort...');
+            
+            result = await lastResortTransporter.sendMail({
+              from: `EcoPulse <${process.env.EMAIL_USER}>`,
+              to: user.email,
+              subject: 'Password Reset Instructions (Important)',
+              html: html,
+              text: `Please use this code to reset your password: ${shortCode}\nOr use this link: ${isMobile ? appSchemeUrl : webResetUrl}`
+            });
+            
+            console.log(`Password reset email sent with last resort provider`, {
+              messageId: result.messageId,
+              deliveryTime: new Date().toISOString()
+            });
+          } catch (lastError) {
+            console.error('All email providers failed:', lastError);
+            throw lastError;
+          }
+        }
+      } else {
+        throw primaryError;
+      }
+    }
 
-    console.log(`Password reset email sent to ${user.email}`, {
-      messageId: info.messageId,
-      platform,
-      shortCode, // Log the short code for debugging
-      deliveryTime: new Date().toISOString()
-    });
-
-    return { success: true, messageId: info.messageId };
-
+    return { 
+      success: true, 
+      messageId: result?.messageId || 'unknown',
+      provider: result?.envelope?.from || process.env.EMAIL_FROM
+    };
   } catch (error) {
     console.error('Password reset email failure:', {
       error: error.message,
       user: user.email,
       timestamp: new Date().toISOString()
     });
-    throw new Error('Failed to send password reset email. Please try again later.');
-  }
-};
-// Account recovery email
-const sendAccountRecoveryEmail = async (user, token) => {
-  try {
-    if (!process.env.EMAIL_FROM || !process.env.EMAIL_USER) {
-      throw new Error('Email configuration is missing');
+    
+    // Determine if this might be a configuration issue
+    let errorMessage = 'Failed to send password reset email. Please try again later.';
+    
+    if (error.code === 'EAUTH' || error.command === 'AUTH') {
+      errorMessage = 'Email service authentication failed. Please contact support.';
+      console.error('CRITICAL: Email authentication failed - check credentials');
+    } else if (error.code === 'ESOCKET' || error.code === 'ECONNECTION') {
+      errorMessage = 'Email service connection failed. Please try again later.';
+      console.error('CRITICAL: Email connection failed - check network or service');
+    } else if (error.responseCode === 550) {
+      errorMessage = 'Your email address was rejected by the server. Please check if it is valid.';
+      console.error('Email rejected by server - likely invalid recipient');
     }
     
-    // Generate a 6-digit verification code from the token
-    // This creates a code that's linked to the same token
-    const verificationCode = generateVerificationCode();
-    
-    // Use environment variable for the frontend URL
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const recoveryUrl = `${baseUrl}/reactivate-account?token=${token}`;
-
-    console.log('Sending account recovery email...');
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to: user.email,
-      subject: 'Recover Your Account - EcoPulse',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2C7A51;">Account Recovery</h2>
-          <p>We received a request to recover your deactivated account.</p>
-          
-          <h3 style="color: #333; margin-top: 20px;">On Web Browser:</h3>
-          <p>Click the link below to reactivate your account:</p>
-          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
-            <a href="${recoveryUrl}" style="background-color: #2C7A51; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Recover My Account</a>
-          </div>
-          
-          <h3 style="color: #333; margin-top: 25px;">On Mobile App:</h3>
-          <p>Enter the verification code below in the app to reactivate your account:</p>
-          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; font-size: 24px; letter-spacing: 5px; margin: 20px 0;">
-            <strong>${verificationCode}</strong>
-          </div>
-          
-          <p><strong>Important:</strong> This recovery information will expire in 5 hours.</p>
-          <p>If you did not request to recover your account, please ignore this email.</p>
-          
-          <p>Thank you,<br>The EcoPulse Team</p>
-        </div>
-      `
-    });
-
-    console.log('Account recovery email sent successfully:', {
-      messageId: info.messageId,
-      recipient: user.email
-    });
-
-    // Store the verification code in your database along with the token
-    // This allows either the token or code to be used for recovery
-    await storeVerificationCode(user._id, verificationCode);
-
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error('Error sending account recovery email:', error);
-    throw new Error(`Failed to send account recovery email: ${error.message}`);
+    throw new Error(errorMessage);
   }
 };
+
 
 // Function to store the verification code in the database
 const storeVerificationCode = async (userId, code) => {
   try {
-    // Example implementation - adjust to your database model
+    // Properly import the User model
+    const User = require('../models/User');
+    
     await User.findByIdAndUpdate(userId, { 
       reactivationCode: code,
       reactivationCodeExpires: new Date(Date.now() + 5 * 60 * 60 * 1000) // 5 hours
@@ -741,21 +787,48 @@ const sendDeactivatedLoginAttempt = async (user) => {
 // Verify that the email server is ready
 transporter.verify(function(error, success) {
   if (error) {
-    console.error('Email transport verification failed:', error);
+    console.error('Email transport verification failed:', {
+      code: error.code,
+      command: error.command,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // Try to log which SMTP settings are being used (without showing passwords)
+    console.log('Email configuration:', {
+      service: process.env.EMAIL_SERVICE,
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: process.env.EMAIL_PORT || 587,
+      secure: process.env.EMAIL_SECURE === 'true',
+      user: process.env.EMAIL_USER,
+      hasPassword: !!process.env.EMAIL_APP_PASSWORD
+    });
   } else {
     console.log('Email server is ready to send messages');
+    
+    // Send a test email during startup in development mode
+    if (process.env.NODE_ENV === 'development' && process.env.SEND_TEST_EMAIL === 'true') {
+      transporter.sendMail({
+        from: process.env.EMAIL_FROM,
+        to: process.env.EMAIL_USER, // Send to yourself
+        subject: 'Email Service Test on Startup',
+        text: `This is a test email to verify the email service is working properly. 
+               Server started at: ${new Date().toISOString()}`
+      }).then(info => {
+        console.log('Startup test email sent successfully:', info.messageId);
+      }).catch(err => {
+        console.error('Startup test email failed:', err);
+      });
+    }
   }
 });
 
-// Export all the necessary functions
 module.exports = {
-  generateVerificationCode,
   sendVerificationEmail,
   sendGoogleVerificationEmail,
   sendPasswordResetEmail,
-  sendAccountRecoveryEmail,
   sendAutoDeactivationEmail,
-  sendReactivationConfirmationEmail,
+  sendReactivationConfirmationEmail,  
   sendAdminNotification,
   sendDeactivatedLoginAttempt,
   sendReactivationTokenEmail  

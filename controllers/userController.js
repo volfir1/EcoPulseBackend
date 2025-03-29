@@ -369,47 +369,6 @@ exports.restoreUser = async (req, res) => {
   }
 };
 
-
-  // Get all users including deleted ones (admin only)
-  exports.getAllDeactivated= async (req, res) => {
-    try {
-      // Use a raw find query without the middleware filter
-      const users = await User.find({})
-        .select('-password')
-        .sort({ createdAt: -1 });
-      
-      // Mark which users are deleted in the response
-      const formattedUsers = users.map(user => ({
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        phone: user.phone || '',
-        role: user.role,
-        isDeactivated: user.isDeactivated || false,
-        lastLogin: user.lastLogin
-      }));
-      
-      res.json({
-        success: true,
-        users: formattedUsers,
-        stats: {
-          total: users.length,
-          active: users.filter(user => !user.isDeactivated).length,
-          deleted: users.filter(user => user.isDeactivated).length
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching all users:", error);
-      res.status(500).json({
-        success: false,
-        message: "Server Error",
-        error: error.message
-      });
-    }
-  };
-
-
   exports.deleteAllUsers = async (req, res) => {
     try {
       // 1. Get all users from MongoDB to find their Firebase UIDs

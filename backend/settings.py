@@ -56,6 +56,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://ecopulsebackend.onrender.com',
     'https://ecopulsebackend-1.onrender.com',
     'https://ecopulse-delta.vercel.app'
+    'https://ecopulse-alpha.vercel.app'
 ]
 
 
@@ -157,7 +158,8 @@ CORS_ALLOWED_ORIGINS = [
     'https://ecopulsebackend-1.onrender.com',
 
     # Vercel Frontend:
-    'https://ecopulse-delta.vercel.app' 
+    'https://ecopulse-delta.vercel.app',
+    'https://ecopulse-alpha.vercel.app'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
