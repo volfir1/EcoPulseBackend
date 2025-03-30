@@ -27,7 +27,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-lh&mm0n5y9n5q02tcyd0jd1)gb
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,ecopulsebackend.onrender.com,ecopulsebackend-1.onrender.com').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,ecopulsebackend.onrender.com,ecopulsebackend-1.onrender.com,10.0.2.2').split(',')
 
 # CORS Settings - Update to be more permissive for development
 # CORS_ALLOW_ALL_ORIGINS = True  # For development only
@@ -152,6 +152,10 @@ USE_TZ = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://localhost:5000',
+    'http://127.0.0.1:8000',
+    'http://192.168.1.2:5000',
+    'http://localhost:8081',
+    'exp://192.168.1.2:8081',
     'https://ecopulsebackend.onrender.com',
 
     # Django Backend:

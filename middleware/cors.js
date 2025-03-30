@@ -9,6 +9,7 @@ const setupCors = (app) => {
   // Get environment variables with defaults
   const NODE_ENV = process.env.NODE_ENV || 'development';
   const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const MOBILE_URL = process.env.MOBILE_URL || 'http://192.168.1.2:8081';
 
   // Parse comma-separated origins from environment variable
   const CORS_ORIGINS = process.env.ALLOWED_ORIGINS
@@ -18,6 +19,10 @@ const setupCors = (app) => {
   // Build allowed origins list
   const allowedOrigins = [
     FRONTEND_URL,
+    MOBILE_URL,
+    // Mobile app development URLs
+    'ecopulse://expo-development-client',
+    'http://192.168.1.2:8081',
     // Vercel deployments - UPDATED to include both domain patterns
     'https://ecopulse-delta.vercel.app',
     'https://ecopulse-alpha.vercel.app',
@@ -28,9 +33,14 @@ const setupCors = (app) => {
     'https://ecopulsebackend.onrender.com',
     // Local development
     'http://localhost:8000',
+    'http://localhost:8081',
+    'http://localhost:5000',
+    'http://127.0.0.1:8000',
     'http://localhost:5173',
     'http://localhost:3000',
-    'http://localhost:5000',
+    'exp://192.168.1.2:8081',
+    'http://127.0.0.1:8000',
+    'http://192.168.1.2:5000',  
     ...CORS_ORIGINS
   ];
 
@@ -41,11 +51,17 @@ const setupCors = (app) => {
   const corsOptions = {
     origin: function(origin, callback) {
       // Debug logging
-      console.log(`CORS request from: ${origin || 'No origin (e.g. Postman, curl)'}`);
+      console.log(`CORS request from: ${origin || 'No origin (e.g. Mobile app, Postman, curl)'}`);
 
       // Allow requests with no origin (like mobile apps, Postman, etc)
       if (!origin) {
-        console.log('Request has no origin, allowing');
+        console.log('Request has no origin, allowing (likely a mobile app request)');
+        return callback(null, true);
+      }
+
+      // Check for Expo/React Native deep link scheme
+      if (origin.startsWith('ecopulse://') || origin.startsWith('exp://')) {
+        console.log("✅ Allowed Expo/React Native origin:", origin);
         return callback(null, true);
       }
 
@@ -83,7 +99,9 @@ const setupCors = (app) => {
       'Cache-Control',
       'Cookie',
       'X-API-Key',
-      'x-client-type' // <-- ADD THIS HEADER HERE
+      'x-client-type',
+      'expo-platform',
+      'expo-version'
     ],
     exposedHeaders: ['Content-Length', 'X-Total-Count', 'X-New-Token'],
     maxAge: 86400 // Cache preflight request results for 24 hours (in seconds)
@@ -102,6 +120,8 @@ const setupCors = (app) => {
       if (allowedOrigins.includes(origin) ||
           origin.match(/https:\/\/(.*\.)?eco-pulse-final(-git-[\w-]+)?\.vercel\.app/) ||
           origin.match(/https:\/\/(.*\.)?ecopulse-delta(-git-[\w-]+)?\.vercel\.app/) ||
+          origin.startsWith('ecopulse://') ||
+          origin.startsWith('exp://') ||
           NODE_ENV === 'development') {
         allowOrigin = origin;
       }
@@ -110,25 +130,23 @@ const setupCors = (app) => {
     // IMPORTANT: Set all required CORS headers
     res.header('Access-Control-Allow-Origin', allowOrigin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    // --- ADD 'x-client-type' to this list as well ---
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key, x-client-type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key, x-client-type, expo-platform, expo-version');
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Max-Age', '86400');
 
-    console.log(`OPTIONS request from ${origin || 'unknown'} to ${req.path} - responded with CORS headers`);
+    console.log(`OPTIONS request from ${origin || 'unknown/mobile'} to ${req.path} - responded with CORS headers`);
 
     // End preflight request successfully
     res.status(204).end();
   });
 
-  // Special handling for problematic endpoints - Add header here too for safety
+  // Special handling for problematic endpoints
   app.options('/api/auth/check-account-status', (req, res) => {
     const origin = req.headers.origin;
 
     res.header('Access-Control-Allow-Origin', origin || '*');
     res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    // --- ADD 'x-client-type' to this list ---
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key, x-client-type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key, x-client-type, expo-platform, expo-version');
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Max-Age', '86400');
 
@@ -137,14 +155,13 @@ const setupCors = (app) => {
     res.sendStatus(204);
   });
 
-  // Also handle /auth/check-account-status (without /api prefix) - Add header here too
+  // Also handle /auth/check-account-status (without /api prefix)
   app.options('/auth/check-account-status', (req, res) => {
     const origin = req.headers.origin;
 
     res.header('Access-Control-Allow-Origin', origin || '*');
     res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    // --- ADD 'x-client-type' to this list ---
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key, x-client-type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Cookie, X-API-Key, x-client-type, expo-platform, expo-version');
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Max-Age', '86400');
 
