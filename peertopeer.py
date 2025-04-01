@@ -6,6 +6,7 @@ import logging
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 import time
+import datetime
 
 # Configure the logger
 logging.basicConfig(level=logging.DEBUG)
@@ -16,6 +17,20 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 file_path = os.path.join(script_dir, 'peertopeer.xlsx')
 df = pd.read_excel(file_path)
 
+# Ensure correct data types for key columns
+if 'Year' in df.columns:
+    df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+    
+if 'isPredicted' in df.columns:
+    # Convert various representations of boolean to actual boolean
+    df['isPredicted'] = df['isPredicted'].map(lambda x: str(x).lower() in ('true', 't', '1', 'yes', 'y'))
+    logger.debug(f"isPredicted column values: {df['isPredicted'].value_counts().to_dict()}")
+
+# Print dataframe info for debugging
+logger.debug(f"DataFrame columns: {df.columns.tolist()}")
+logger.debug(f"DataFrame types: {df.dtypes.to_dict()}")
+logger.debug(f"DataFrame first 3 rows: {df.head(3)}")
+
 # MongoDB connection
 MONGO_URL = os.getenv("MONGO_URL")  # Load MongoDB URI from environment variables
 DATABASE_NAME = "ecopulse"  # Replace with your database name
@@ -23,34 +38,100 @@ COLLECTION_NAME = "peertopeer"  # Replace with your collection name
 
 def connect_to_mongodb_peertopeer(retries=3, delay=5):
     """
-    Connect to MongoDB Atlas and return the collection.
-    Retries the connection in case of failure.
+    Connect to MongoDB Atlas with better error handling.
     """
+    if not MONGO_URL:
+        logger.error("MONGO_URL environment variable is not set")
+        raise ValueError("MONGO_URL environment variable is not set")
+        
     for attempt in range(retries):
         try:
-            client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+            logger.debug(f"Attempting to connect to MongoDB (attempt {attempt + 1}/{retries})")
+            
+            # Parse the MongoDB URL to get the host for logging (hide password)
+            mongo_host = MONGO_URL.split('@')[-1].split('/')[0] if '@' in MONGO_URL else MONGO_URL.split('/')[2]
+            logger.debug(f"Connecting to MongoDB at {mongo_host}")
+            
+            client = MongoClient(
+                MONGO_URL,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000,
+                socketTimeoutMS=10000,
+                tls='mongodb+srv' in MONGO_URL,  # Only enable TLS for Atlas
+                tlsAllowInvalidCertificates=False  # Disable in production
+            )
             db = client[DATABASE_NAME]
             collection = db[COLLECTION_NAME]
+            
             # Attempt to ping the server to check the connection
             client.admin.command('ping')
             logger.debug("Connected to MongoDB Atlas successfully.")
             return collection
-        except ConnectionFailure as e:
-            logger.error(f"Error connecting to MongoDB (attempt {attempt + 1}): {e}")
+        except Exception as e:
+            logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
             if attempt < retries - 1:
+                logger.info(f"Retrying in {delay} seconds...")
                 time.sleep(delay)
             else:
-                raise
+                logger.error(f"All {retries} connection attempts to MongoDB failed")
+                raise ConnectionError(f"Failed to connect to MongoDB after {retries} attempts: {e}")
+
+def fetch_and_save_data():
+    """
+    Fetch data from MongoDB and save it to peertopeer.xlsx, with all data as strings.
+    """
+    try:
+        # Connect to MongoDB
+        collection = connect_to_mongodb_peertopeer()
+        
+        # Fetch all documents from the collection
+        cursor = collection.find({})
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(list(cursor))
+        
+        # Remove MongoDB _id field if it exists
+        if '_id' in df.columns:
+            df.drop('_id', axis=1, inplace=True)
+        
+        # Convert ALL columns to strings (including numbers)
+        for col in df.columns:
+            if col != 'isPredicted':  # Keep isPredicted as boolean
+                df[col] = df[col].astype(str)  # Force everything to string
+        
+        # Clean up numeric strings (remove commas for consistency)
+        for col in df.columns:
+            if col != 'isPredicted' and df[col].dtype == 'object' and df[col].str.contains(',').any():
+                df[col] = df[col].str.replace(',', '')  # Remove commas
+        
+        # Get the path to the Excel file
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(script_dir, 'peertopeer.xlsx')
+        
+        # Save to Excel, overwriting the existing file
+        df.to_excel(file_path, index=False)
+        logger.info(f"Successfully saved {len(df)} records to {file_path}")
+        
+        return df
+    except Exception as e:
+        logger.error(f"Error in fetch_and_save_data: {e}")
+        raise
 
 def createPeertoPeer(data):
     """
-    Insert actual data into MongoDB.
+    Insert actual data into MongoDB with isPredicted=False flag.
     """
     try:
         collection = connect_to_mongodb_peertopeer()
-        # Add the isPredicted flag for actual data
-        collection.insert_one(data)
-        logger.info("Actual data inserted successfully.")
+        
+        # Add the isPredicted flag and set to False for actual data
+        data_with_flag = {**data, "isPredicted": False}
+        
+        collection.insert_one(data_with_flag)
+        logger.info("Actual data inserted successfully with isPredicted=False.")
+        
+        # Update the Excel file after insertion
+        fetch_and_save_data()  
     except Exception as e:
         logger.error(f"Error inserting actual data: {e}")
         raise
@@ -97,6 +178,35 @@ for subgrid in subgrids:
 
 # Function to perform linear regression and predict future values
 def predict_future(df, column, target_year=2040):
+    """
+    Predict a future value using linear regression.
+    First checks if actual data exists for the target year (isPredicted=False).
+    """
+    # Debug the input data
+    logger.debug(f"predict_future: Checking for year {target_year} in column {column}")
+    logger.debug(f"DataFrame columns: {df.columns.tolist()}")
+    
+    # Ensure year is numeric
+    target_year = int(target_year)
+    
+    # First check if we have actual data for this year (not predicted)
+    if 'isPredicted' in df.columns and 'Year' in df.columns:
+        # Make sure Year is numeric for comparison
+        if df['Year'].dtype != 'int64' and df['Year'].dtype != 'float64':
+            df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+            
+        # Print the unique years in the dataframe for debugging
+        logger.debug(f"Years in dataframe: {sorted(df['Year'].unique())}")
+        
+        # Check for actual data (isPredicted=False) for target year
+        actual_data = df[(df['Year'] == target_year) & (df['isPredicted'] == False)]
+        logger.debug(f"Found {len(actual_data)} actual data rows for year {target_year}")
+        
+        if not actual_data.empty and column in actual_data.columns:
+            actual_value = actual_data[column].values[0]
+            logger.info(f"Using actual value for {column} in year {target_year}: {actual_value}")
+            return np.array([target_year]), np.array([float(actual_value)])
+    
     # Drop rows with missing values in the specified column
     df_clean = df.dropna(subset=[column])
     
@@ -105,11 +215,19 @@ def predict_future(df, column, target_year=2040):
         logger.warning(f"No data available for {column} after dropping NaN values")
         return np.array([target_year]), np.array([0.0])  # Return default values
     
-    # Check if the target year is in our dataset
+    # If target year exists in our dataset (might be actual or predicted)
     if target_year in df_clean['Year'].values:
-        # Return the actual value for that year
+        # If there's 'isPredicted' column, prioritize non-predicted data
+        if 'isPredicted' in df_clean.columns:
+            actual_rows = df_clean[(df_clean['Year'] == target_year) & (df_clean['isPredicted'] == "false")]
+            if not actual_rows.empty:
+                target_value = actual_rows[column].values[0]
+                logger.debug(f"Found actual value for {column} in year {target_year}: {target_value}")
+                return np.array([target_year]), np.array([target_value])
+        
+        # Otherwise, use any value for that year
         target_value = df_clean[df_clean['Year'] == target_year][column].values[0]
-        logger.debug(f"Found actual value for {column} in year {target_year}: {target_value}")
+        logger.debug(f"Found value for {column} in year {target_year}: {target_value}")
         return np.array([target_year]), np.array([target_value])
     
     # Get the maximum and minimum year in the data
@@ -160,139 +278,156 @@ def predict_future(df, column, target_year=2040):
     return np.array([target_year]), np.array([0.0])
 
 # Function to get predictions based on energy type and year range
-def get_peer_to_predictions(start_year=None, end_year=None):
+def get_peer_to_predictions(year=None):
     """
-    Predict energy metrics for a given year range.
-
+    Get energy metrics for a specific year.
+    Returns actual data if available (isPredicted=False), otherwise generates predictions.
+    
     Parameters:
-        start_year (int): The start year for predictions. Defaults to 2020 if null.
-        end_year (int): The end year for predictions. Defaults to 2026 if null.
-
+        year (int/str): The year to get data for. Defaults to current year if None.
+        
     Returns:
-        pd.DataFrame: A DataFrame containing predicted values for the selected metrics across the year range.
+        dict: A dictionary with the structure {
+            'year': int,
+            'data': list of dicts with place metrics,
+            'success': bool,
+            'message': str
+        }
     """
-    if start_year is None:
-        start_year = 2020
-    
-    if end_year is None:
-        end_year = 2026
-    
-    # Ensure end_year is at least equal to start_year
-    if end_year < start_year:
-        end_year = start_year
+    try:
+        # Convert year to integer (handles string input from API)
+        if year is None:
+            year = datetime.datetime.now().year
+        year = int(year)
         
-    logger.debug(f"Generating predictions for year range: {start_year} to {end_year}")
-    
-    all_predictions = []
-    
-    # Check if 'Visayas Total Power Generation (GWh)' exists in the DataFrame
-    visayas_gen_column = 'Visayas Total Power Generation (GWh)'
-    has_visayas_gen = visayas_gen_column in df.columns
-    if has_visayas_gen:
-        non_null_count = df[visayas_gen_column].count()
-        logger.debug(f"Column '{visayas_gen_column}' exists with {non_null_count} non-null values")
-    else:
-        logger.warning(f"Column '{visayas_gen_column}' not found in DataFrame")
-    
-    # Predict for each year in the range
-    for year in range(start_year, end_year + 1):
-        logger.debug(f"Processing predictions for year: {year}")
+        logger.debug(f"Processing request for year: {year}")
+
+        # Initialize response structure
+        response = {
+            'year': year,
+            'data': [],
+            'success': True,
+            'message': 'Data retrieved successfully'
+        }
+
+        # Ensure data is properly typed (convert strings to numbers)
+        if 'Year' in df.columns:
+            df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
         
-        # Create dictionaries to store Visayas power data
-        visayas_power_gen_dict = {}
-        visayas_consumption_dict = {}
+        # Convert all numeric columns from strings to floats
+        for col in df.columns:
+            if col not in ['Year', 'isPredicted'] and df[col].dtype == 'object':
+                try:
+                    df[col] = df[col].str.replace(',', '').astype(float)
+                except (AttributeError, ValueError):
+                    pass
+
+        # Check for actual data first (isPredicted=False)
+        if 'isPredicted' in df.columns:
+            actual_data = df[(df['Year'] == year) & (df['isPredicted'] == False)]
+            
+            if not actual_data.empty:
+                logger.info(f"Returning actual data for year {year}")
+                for place in subgrids:
+                    place_data = {
+                        'place': place,
+                        'metrics': {},
+                        'isPredicted': False
+                    }
+                    
+                    for metric in metrics:
+                        col_name = f"{place} {metric}"
+                        if col_name in actual_data.columns:
+                            value = actual_data[col_name].iloc[0]
+                            try:
+                                place_data['metrics'][metric] = float(value)
+                            except (ValueError, TypeError):
+                                place_data['metrics'][metric] = 0.0
+                    
+                    response['data'].append(place_data)
+                return response
+
+        # If no actual data, generate predictions
+        logger.info(f"Generating predictions for year {year}")
         
-        # Predict Visayas Total Power Generation for the specified year
-        if has_visayas_gen and non_null_count > 0:
+        # Get Visayas totals for consumption calculation
+        visayas_gen = 0.0
+        visayas_consumption = 0.0
+        
+        if 'Visayas Total Power Generation (GWh)' in df.columns:
             try:
-                future_years, visayas_power_gen_predictions = predict_future(df, visayas_gen_column, target_year=year)
-                visayas_power_gen_dict = dict(zip(future_years, visayas_power_gen_predictions))
+                _, visayas_gen = predict_future(df, 'Visayas Total Power Generation (GWh)', year)
+                visayas_gen = float(visayas_gen[0]) if len(visayas_gen) > 0 else 0.0
             except Exception as e:
-                logger.error(f"Error predicting Visayas Total Power Generation for year {year}: {e}")
-        
-        # Predict Visayas Total Power Consumption for the specified year
-        visayas_consumption_column = 'Visayas Total Power Consumption (GWh)'
-        if visayas_consumption_column in df.columns:
+                logger.error(f"Error predicting Visayas generation: {e}")
+
+        if 'Visayas Total Power Consumption (GWh)' in df.columns:
             try:
-                future_years, visayas_consumption_predictions = predict_future(df, visayas_consumption_column, target_year=year)
-                visayas_consumption_dict = dict(zip(future_years, visayas_consumption_predictions))
+                _, visayas_consumption = predict_future(df, 'Visayas Total Power Consumption (GWh)', year)
+                visayas_consumption = float(visayas_consumption[0]) if len(visayas_consumption) > 0 else 0.0
             except Exception as e:
-                logger.error(f"Error predicting Visayas Total Power Consumption for year {year}: {e}")
-        else:
-            logger.warning(f"Column '{visayas_consumption_column}' not found in DataFrame")
-    
-        # Iterate over each subgrid (place)
+                logger.error(f"Error predicting Visayas consumption: {e}")
+
+        # Generate predictions for each subgrid
         for place, df_place in subgrid_data.items():
-            logger.debug(f"Processing data for {place} for year {year}")
-    
-            # Check if the required columns exist in the DataFrame
+            place_data = {
+                'place': place,
+                'metrics': {},
+                'isPredicted': True
+            }
+            
+            # Predict generation
             if 'Total Power Generation (GWh)' in df_place.columns:
                 try:
-                    # Predict the place's total power generation
-                    future_years, power_generation_predictions = predict_future(df_place, 'Total Power Generation (GWh)', target_year=year)
+                    _, gen_pred = predict_future(df_place, 'Total Power Generation (GWh)', year)
+                    gen_pred = float(gen_pred[0]) if len(gen_pred) > 0 else 0.0
+                    place_data['metrics']['Total Power Generation (GWh)'] = gen_pred
                     
-                    # Only add predictions for the current year we're processing
-                    for i, yr in enumerate(future_years):
-                        if yr == year:
-                            logger.debug(f"Predicted Power Generation for {place} in {year}: {power_generation_predictions[i]}")
-                            
-                            # Add to predictions
-                            predictions_df = pd.DataFrame({
-                                'Year': [year],
-                                'Place': [place],
-                                'Energy Type': ['Total Power Generation (GWh)'],
-                                'Predicted Value': [power_generation_predictions[i]]
-                            })
-                            all_predictions.append(predictions_df)
-                            
-                            # Calculate and add consumption prediction
-                            if yr in visayas_power_gen_dict and yr in visayas_consumption_dict:
-                                try:
-                                    visayas_power_gen = visayas_power_gen_dict.get(yr)
-                                    visayas_consumption = visayas_consumption_dict.get(yr)
-                                    
-                                    if visayas_power_gen != 0:  # Prevent division by zero
-                                        # Calculate ratio and consumption
-                                        ratio = power_generation_predictions[i] / visayas_power_gen
-                                        place_consumption = ratio * visayas_consumption
-                                        
-                                        predictions_df_consumption = pd.DataFrame({
-                                            'Year': [year],
-                                            'Place': [place],
-                                            'Energy Type': [f'{place} Estimated Consumption (GWh)'],
-                                            'Predicted Value': [place_consumption]
-                                        })
-                                        all_predictions.append(predictions_df_consumption)
-                                except Exception as e:
-                                    logger.error(f"Error calculating consumption for {place} in year {year}: {e}")
+                    # Calculate estimated consumption
+                    if visayas_gen > 0:
+                        ratio = gen_pred / visayas_gen
+                        place_data['metrics']['Estimated Consumption (GWh)'] = ratio * visayas_consumption
                 except Exception as e:
-                    logger.error(f"Error predicting Total Power Generation for {place} in year {year}: {e}")
-            else:
-                logger.warning(f"Column 'Total Power Generation (GWh)' not found for {place}")
-    
-            # Predict future values for each metric
+                    logger.error(f"Error predicting generation for {place}: {e}")
+                    place_data['metrics']['Total Power Generation (GWh)'] = 0.0
+            
+            # Predict other metrics
             for metric in metrics:
                 if metric in df_place.columns:
                     try:
-                        future_years, predictions = predict_future(df_place, metric, target_year=year)
-                        
-                        # Only add prediction for the current year
-                        for i, yr in enumerate(future_years):
-                            if yr == year:
-                                predictions_df = pd.DataFrame({
-                                    'Year': [year],
-                                    'Place': [place],
-                                    'Energy Type': [metric],
-                                    'Predicted Value': [predictions[i]]
-                                })
-                                all_predictions.append(predictions_df)
+                        _, pred = predict_future(df_place, metric, year)
+                        place_data['metrics'][metric] = float(pred[0]) if len(pred) > 0 else 0.0
                     except Exception as e:
-                        logger.error(f"Error predicting {metric} for {place} in year {year}: {e}")
-    
-    # Combine all predictions into a single DataFrame
-    if all_predictions:
-        all_predictions_df = pd.concat(all_predictions, ignore_index=True)
-        return all_predictions_df
-    else:
-        logger.warning("No predictions generated for the specified year range.")
-        return pd.DataFrame()
+                        logger.error(f"Error predicting {metric} for {place}: {e}")
+                        place_data['metrics'][metric] = 0.0
+            
+            response['data'].append(place_data)
+        
+        return response
+
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}")
+        return {
+            'year': year if 'year' in locals() else datetime.datetime.now().year,
+            'data': [],
+            'success': False,
+            'message': f"Error processing request: {str(e)}"
+        }
+
+if __name__ == "__main__":
+    try:
+        # Check for actual data for year 2024
+        if 'Year' in df.columns and 'isPredicted' in df.columns:
+            actual_2024 = df[(df['Year'] == 2024) & (df['isPredicted'] == False)]
+            print(f"Checking for actual 2024 data: Found {len(actual_2024)} records")
+            if not actual_2024.empty:
+                print("First actual 2024 record:")
+                print(actual_2024.iloc[0])
+        
+        # Continue with regular execution
+        data = fetch_and_save_data()
+        print("Data successfully fetched and saved to peertopeer.xlsx")
+        print("First few rows of the data:")
+        print(data.head())
+    except Exception as e:
+        print(f"An error occurred: {e}")

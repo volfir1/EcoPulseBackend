@@ -58,7 +58,7 @@ def get_renewable_energy_predictions(request, target):
 @require_GET
 def peertopeer_predictions(request):
     """
-    API endpoint to get predictions based on year and filters.
+    API endpoint to get predictions based on year.
     """
     try:
         year = request.GET.get('year')
@@ -69,26 +69,38 @@ def peertopeer_predictions(request):
         else:
             year = 2026  # Default year if not provided
 
-        # Split filters into a list
-
         logger.debug(f"Received request with year: {year}")
 
-        # Get predictions for the specified year and filters
-        predictions = get_peer_to_predictions(year)
+        # Get predictions for the specified year
+        result = get_peer_to_predictions(year)
         
-        # Convert the DataFrame to a dictionary for JSON response
-        predictions_dict = predictions.to_dict(orient='records')
-        
-        return JsonResponse({
-            'status': 'success',
-            'predictions': predictions_dict
-        })
+        # Check if result is a dictionary (new format) or DataFrame (old format)
+        if isinstance(result, dict):
+            logger.debug("Processing dictionary result from get_peer_to_predictions")
+            
+            # Return the dictionary directly as it's already in the right format
+            return JsonResponse({
+                'status': 'success',
+                'year': result.get('year'),
+                'data': result.get('data'),
+                'message': result.get('message', '')
+            })
+        else:
+            # Handle the case where it might still be a DataFrame (backward compatibility)
+            logger.debug("Processing DataFrame result from get_peer_to_predictions")
+            predictions_dict = result.to_dict(orient='records')
+            
+            return JsonResponse({
+                'status': 'success',
+                'predictions': predictions_dict
+            })
+            
     except Exception as e:
         logger.error(f"Error in peertopeer_predictions: {e}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)}
-        , status=500)
+            'message': str(e)
+        }, status=500)
 
 @require_GET
 def solar_recommendations(request):
