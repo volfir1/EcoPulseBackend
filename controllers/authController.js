@@ -30,9 +30,8 @@ exports.register = async (req, res) => {
     }
 
     // 2. Check if user exists in MongoDB (including deactivated users)
-    const db = mongoose.connection.db;
-    const usersCollection = db.collection('users');
-    const existingUser = await usersCollection.findOne({ email });
+    // FIX: Use the User model instead of usersCollection
+    const existingUser = await User.findOne({ email });
     
     if (existingUser) {
       // Check if account is auto-deactivated - if so, return special message

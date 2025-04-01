@@ -2,6 +2,7 @@
   const User = require("../models/User");
   const mongoose = require("mongoose"); // Make sure to import mongoose
   const bcrypt = require("bcryptjs");
+  const admin = require('../firebase/firebase')
   exports.getAllUsers = async (req, res) => {
       try {
         const users = await User.find()
@@ -369,81 +370,79 @@ exports.restoreUser = async (req, res) => {
   }
 };
 
-  exports.deleteAllUsers = async (req, res) => {
-    try {
-      // 1. Get all users from MongoDB to find their Firebase UIDs
-      const allUsers = await User.find({}, 'email googleId');
-      console.log(`Found ${allUsers.length} users in MongoDB`);
+exports.deleteAllUsers = async (req, res) => {
+  try {
+    // 1. Get all users from MongoDB to find their Firebase UIDs
+    const allUsers = await User.find({}, 'email googleId');
+    console.log(`Found ${allUsers.length} users in MongoDB`);
+    
+    // 2. Delete users from Firebase
+    const firebaseResults = {
+      deleted: 0,
+      errors: []
+    };
+    
+    // Process Firebase deletions in batches to avoid rate limiting
+    const batchSize = 10;
+    
+    for (let i = 0; i < allUsers.length; i += batchSize) {
+      const batch = allUsers.slice(i, i + batchSize);
       
-      // 2. Delete users from Firebase
-      const firebaseResults = {
-        deleted: 0,
-        errors: []
-      };
-      
-      // Process Firebase deletions in batches to avoid rate limiting
-      const batchSize = 10;
-      
-      for (let i = 0; i < allUsers.length; i += batchSize) {
-        const batch = allUsers.slice(i, i + batchSize);
-        
-        // Process each user in the current batch
-        const batchPromises = batch.map(async (user) => {
-          if (user.googleId) {
+      // Process each user in the current batch
+      const batchPromises = batch.map(async (user) => {
+        if (user.googleId) {
+          try {
+            // Try to delete by UID
+            await admin.auth().deleteUser(user.googleId);
+            firebaseResults.deleted++;
+          } catch (uidError) {
+            // If UID deletion fails, try by email
             try {
-              // Try to delete by UID
-              await admin.auth().deleteUser(user.googleId);
+              const firebaseUser = await admin.auth().getUserByEmail(user.email);
+              await admin.auth().deleteUser(firebaseUser.uid);
               firebaseResults.deleted++;
-            } catch (uidError) {
-              // If UID deletion fails, try by email
-              try {
-                const firebaseUser = await admin.auth().getUserByEmail(user.email);
-                await admin.auth().deleteUser(firebaseUser.uid);
-                firebaseResults.deleted++;
-              } catch (emailError) {
-                // Log errors but continue with other users
-                console.error(`Failed to delete Firebase user: ${user.email}`, emailError.message);
-                firebaseResults.errors.push({ 
-                  email: user.email, 
-                  error: emailError.message 
-                });
-              }
+            } catch (emailError) {
+              // Log errors but continue with other users
+              console.error(`Failed to delete Firebase user: ${user.email}`, emailError.message);
+              firebaseResults.errors.push({ 
+                email: user.email, 
+                error: emailError.message 
+              });
             }
           }
-        });
-        
-        // Wait for all operations in this batch to complete
-        await Promise.all(batchPromises);
-        
-        // Add a small delay between batches to avoid Firebase rate limits
-        if (i + batchSize < allUsers.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
         }
+      });
+      
+      // Wait for all operations in this batch to complete
+      await Promise.all(batchPromises);
+      
+      // Add a small delay between batches to avoid Firebase rate limits
+      if (i + batchSize < allUsers.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
-      console.log(`Deleted ${firebaseResults.deleted} users from Firebase`);
-      
-      // 3. Delete all users from MongoDB
-      const mongoResult = await mongoose.connection.db.collection('users').deleteMany({});
-      console.log(`Deleted all ${mongoResult.deletedCount} users from MongoDB`);
-      
-      // 4. Return results
-      res.status(200).json({
-        success: true,
-        message: `Successfully deleted all users`,
-        mongoDbDeleted: mongoResult.deletedCount,
-        firebaseDeleted: firebaseResults.deleted,
-        firebaseErrors: firebaseResults.errors.length > 0 ? firebaseResults.errors : undefined
-      });
-    } catch (error) {
-      console.error("Error deleting all users:", error);
-      res.status(500).json({
-        success: false,
-        message: "Server Error",
-        error: error.message
-      });
     }
-  };
+    
+    // 3. Delete all users from MongoDB
+    const mongoResult = await User.deleteMany({});
+    
+    // 4. Return the results
+    res.status(200).json({
+      success: true,
+      message: "Successfully deleted all users",
+      mongoDbDeleted: mongoResult.deletedCount,
+      firebaseDeleted: firebaseResults.deleted,
+      firebaseErrors: firebaseResults.errors
+    });
+  } catch (error) {
+    console.error("Error deleting all users:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete all users",
+      error: error.message
+    });
+  }
+};
+
   exports.updateOnboarding = async (req, res) => {
     try {
       const { gender, avatar, hasCompletedOnboarding } = req.body;
