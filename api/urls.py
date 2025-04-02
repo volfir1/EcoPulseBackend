@@ -11,7 +11,8 @@ from .views import (
     peertopeer_records,
     peertopeer_record_detail,
     add_recommendation,
-    recommendation_record_detail
+    recommendation_record_detail,
+    train_models
 )
 
 urlpatterns = [
@@ -27,4 +28,6 @@ urlpatterns = [
     path('peertopeer/records/<str:record_id>', peertopeer_record_detail, name='peertopeer_record_detail'),
     path('add/recommendations', add_recommendation, name='recommendation_records'),
     path('add/recommendations/<str:record_id>', recommendation_record_detail, name='recommendation_record_detail'),
+    path('train_models/', train_models, name='train_models')
+
 ]

@@ -41,7 +41,12 @@ def get_renewable_energy_predictions(request, target):
         predictions = get_predictions(target, start_year, end_year)
         
         # Convert the DataFrame to a dictionary for JSON response
-        predictions_dict = predictions.to_dict(orient='records')
+        if hasattr(predictions, 'to_dict'):
+             # It's a DataFrame, convert to list of dicts
+             predictions_dict = predictions.to_dict(orient='records')
+        else:
+             # It's already a list of dictionaries
+             predictions_dict = predictions
         
         return JsonResponse({
             'status': 'success',
@@ -584,4 +589,27 @@ def recommendation_record_detail(request, record_id):
         return JsonResponse({
             'status': 'error',
             'message': str(e)
+        }, status=500)
+    
+@csrf_exempt
+@require_http_methods(["POST"])
+def train_models(request):
+    """
+    API endpoint to train and save machine learning models for prediction.
+    """
+    try:
+        from linearregression_predictiveanalysis import train_and_save_models
+        
+        result = train_and_save_models()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Models trained and saved successfully',
+            'models': result
+        })
+    except Exception as e:
+        logger.error(f"Error in train_models: {e}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f"Error training models: {str(e)}"
         }, status=500)
