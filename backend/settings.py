@@ -148,8 +148,9 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
+    'https://ecopulse-alpha.vercel.app',
     'http://localhost:5173',
     'http://localhost:5000',
     'http://127.0.0.1:8000',
@@ -159,10 +160,8 @@ CORS_ALLOWED_ORIGINS = [
     'https://ecopulsebackend.onrender.com',
     'https://ecopulsebackend-1.onrender.com',
     'https://ecopulse-delta.vercel.app',
-    'https://ecopulse-alpha.vercel.app'  # Fixed this line
 ]
 
-CORS_ALLOW_CREDENTIALS = True
 SESSION_COOKIE_SAMESITE = 'None'
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = 'None'
