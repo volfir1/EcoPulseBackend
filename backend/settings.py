@@ -55,7 +55,7 @@ CORS_ALLOW_HEADERS = [
 CSRF_TRUSTED_ORIGINS = [
     'https://ecopulsebackend.onrender.com',
     'https://ecopulsebackend-1.onrender.com',
-    'https://ecopulse-delta.vercel.app'
+    'https://ecopulse-delta.vercel.app',
     'https://ecopulse-alpha.vercel.app'
 ]
 
@@ -157,14 +157,9 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:8081',
     'exp://192.168.1.2:8081',
     'https://ecopulsebackend.onrender.com',
-
-    # Django Backend:
     'https://ecopulsebackend-1.onrender.com',
-
-    # Vercel Frontend:
     'https://ecopulse-delta.vercel.app',
-        # 'https://ecopulse-alpha.vercel.app',
-    'https://ecopulse-alpha.vercel.app'
+    'https://ecopulse-alpha.vercel.app'  # Fixed this line
 ]
 
 CORS_ALLOW_CREDENTIALS = True
