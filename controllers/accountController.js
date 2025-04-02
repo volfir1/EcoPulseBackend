@@ -119,8 +119,7 @@ exports.reactivateAccount = async (req, res) => {
     // Use direct MongoDB query to bypass the middleware and include deleted users
     const db = mongoose.connection.db;
     const usersCollection = db.collection('users');
-    const rawUser = await usersCollection.findOne({ reactivationToken: cleanToken });
-    
+    const rawUser = await User.findOne({ reactivationToken: cleanToken });    
     // Log detailed information about the query and result
     console.log('Reactivation token search details:', {
       token: cleanToken.substring(0, 5) + '...',
